@@ -25,6 +25,10 @@
   external change is corrected automatically.
 - Кнопка **«Проверить обновление»** в панели: спрашивает у GitHub последний релиз.
   / **Check for updates** button in the panel: asks GitHub for the latest release.
+- Переносимость: пользователь сессии берётся из `DECKY_USER` (не жёстко «deck»),
+  X-дисплей определяется автоматически, поддерживаются разные названия каналов датчика.
+  / Portability: the session user comes from `DECKY_USER` (not a hard-coded `deck`),
+  the X display is auto-detected, and several ALS channel names are supported.
 
 **Установка / Install**
 

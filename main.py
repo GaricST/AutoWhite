@@ -12,6 +12,12 @@ import urllib.request
 import decky
 
 ATOM = "GAMESCOPE_DISPLAY_VIRTUAL_WHITE"
+# Пользователь, которому принадлежит X-сервер gamescope. Decky даёт его в
+# DECKY_USER (на SteamOS — deck); если переменной нет, пробуем «deck».
+SESSION_USER = str(getattr(decky, "DECKY_USER", "") or "deck")
+# Каналы датчика освещённости: у разных консолей названия отличаются.
+ALS_CHANNELS = ("in_illuminance_raw", "in_illuminance_input",
+                "in_intensity_both_raw", "in_intensity_clear_raw", "in_intensity_raw")
 NEUTRAL = (0.3128, 0.3292)      # D65
 LUX_DARK = 15.0                 # темнее — самая тёплая
 LUX_BRIGHT = 250.0              # светлее — нейтральная
@@ -55,34 +61,52 @@ def _read_als_lux():
                     continue
         except OSError:
             continue
-        for channel in ("in_illuminance_raw", "in_intensity_both_raw"):
+        for channel in ALS_CHANNELS:
             value = _read_int(os.path.join(directory, channel))
             if value is not None:
                 return float(value)
     return None
 
 
-def _xprop_env():
-    """Окружение для xprop: плагин работает от root, поэтому PATH и DISPLAY
-    берём явно — иначе xprop не находится или не открывает дисплей."""
-    env = dict(os.environ)
-    env.setdefault("PATH", "/usr/bin:/bin:/usr/sbin:/sbin")
-    env.setdefault("DISPLAY", ":0")
-    env.setdefault("XDG_RUNTIME_DIR", "/run/user/1000")
-    return env
+def _display():
+    """Дисплей игровой сессии: из окружения или по наличию X-сокета.
+
+    На SteamOS это обычно :0, но на других сборках gamescope может занять :1.
+    """
+    from_env = os.environ.get("DISPLAY", "")
+    if from_env:
+        return from_env
+    for number in (0, 1, 2):
+        if os.path.exists("/tmp/.X11-unix/X%d" % number):
+            return ":%d" % number
+    return ":0"
+
+
+def _xprop(args, text=False):
+    """Запускает xprop от имени пользователя сессии.
+
+    Плагин работает от root, а X-сервер gamescope принадлежит пользователю
+    сессии, поэтому без runuser xprop отвечает «Authorization required».
+    Если runuser недоступен, пробуем напрямую.
+    """
+    display = "DISPLAY=" + _display()
+    if SESSION_USER:
+        try:
+            return subprocess.run(
+                ["runuser", "-u", SESSION_USER, "--", "env", display, "xprop"] + args,
+                capture_output=True, timeout=5, check=True, text=text)
+        except FileNotFoundError:
+            pass
+    return subprocess.run(
+        ["env", display, "xprop"] + args,
+        capture_output=True, timeout=5, check=True, text=text)
 
 
 def _write_white(point) -> bool:
     """Пишет виртуальную точку белого в gamescope (x, y в CIE 1931)."""
     bits = [struct.unpack("<I", struct.pack("<f", float(v)))[0] for v in point]
-    # Плагин работает от root, а X-сервер gamescope принадлежит пользователю
-    # deck: без runuser xprop отвечает «Authorization required».
     try:
-        subprocess.run(
-            ["runuser", "-u", "deck", "--", "env", "DISPLAY=:0",
-             "xprop", "-root", "-f", ATOM, "32c", "-set", ATOM,
-             f"{bits[0]}, {bits[1]}"],
-            capture_output=True, timeout=5, check=True)
+        _xprop(["-root", "-f", ATOM, "32c", "-set", ATOM, f"{bits[0]}, {bits[1]}"])
         return True
     except FileNotFoundError as exc:
         _last_state["error"] = "xprop не найден: " + str(exc)[:60]
@@ -108,9 +132,7 @@ def _read_white():
     «записать при старте» недостаточно.
     """
     try:
-        result = subprocess.run(
-            ["runuser", "-u", "deck", "--", "env", "DISPLAY=:0", "xprop", "-root", ATOM],
-            capture_output=True, timeout=5, text=True)
+        result = _xprop(["-root", ATOM], text=True)
         if result.returncode != 0 or "=" not in result.stdout:
             return None
         raw = result.stdout.split("=", 1)[1]

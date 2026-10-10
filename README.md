@@ -109,8 +109,23 @@ The plugin registers the `root` flag, because it writes an X property and reads 
 
 ## Compatibility
 
-Verified on **Lenovo Legion Go 2** (SteamOS). Any handheld that exposes an `als` IIO device
-and runs gamescope should work; other devices are untested.
+| Device | Ambient light sensor | Status |
+|---|---|---|
+| Lenovo Legion Go 2 (SteamOS) | yes | **verified** |
+| Lenovo Legion Go | yes | expected to work |
+| Steam Deck LCD / OLED | **no ALS** | installs and runs, but there is nothing to read — the panel shows "sensor not found" and the screen is left alone |
+| ROG Ally / Ally X | no ALS | same as above |
+| Other SteamOS handhelds | depends on the model | works if `/sys/bus/iio/devices` exposes an `als` device |
+
+The plugin never breaks the screen: without a sensor it simply does nothing. It is not tied
+to a particular user name or display either — the session user comes from Decky
+(`DECKY_USER`) and the X display is detected (`:0`, `:1`, …).
+
+Channel names differ between sensors, so several are tried:
+`in_illuminance_raw`, `in_illuminance_input`, `in_intensity_both_raw`,
+`in_intensity_clear_raw`, `in_intensity_raw`. If your sensor reports on a different
+scale, the thresholds `lux_dark` / `lux_bright` can be adjusted in
+`settings.json`.
 
 ## Repository layout
 
