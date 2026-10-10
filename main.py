@@ -331,7 +331,9 @@ class Plugin:
                     _last_state["lux"] = round(lux) if lux is not None else None
                     want = _target_white(settings, lux)
                     last_read = now
-                if now - last_verify >= VERIFY_INTERVAL:
+                # Сверяем атом только когда есть цель: без датчика плагин
+                # вообще не трогает X (важно для консолей, где ALS нет).
+                if want is not None and now - last_verify >= VERIFY_INTERVAL:
                     last_verify = now
                     actual = await loop.run_in_executor(None, _read_white)
                     if actual is not None and _last_white is not None:
