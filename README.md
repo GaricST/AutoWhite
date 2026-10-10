@@ -131,6 +131,17 @@ gamescope handles the `GAMESCOPE_DISPLAY_VIRTUAL_WHITE` atom in its shared code
 ([steamcompmgr.cpp](https://github.com/ValveSoftware/gamescope/blob/master/src/steamcompmgr.cpp)),
 so the same mechanism is available on the Deck.
 
+The device is detected by DMI and gets its own profile, because the same white point
+looks different on different panels and the light sensors report different scales:
+
+| Device | Warm end | Thresholds |
+|---|---|---|
+| Steam Deck (Jupiter LCD / Galileo OLED) | 0.400 | 30 … 900 lx |
+| Legion Go / Legion Go 2 (83E1 / 83N0) | 0.375 | 15 … 250 lx |
+
+The profile is applied once per device (recorded as `device` in `settings.json`) and never
+overrides your own values afterwards.
+
 Sensors differ between devices, so the plugin accepts any IIO device with an
 `in_illuminance_*` channel, and also knows common light-sensor drivers
 (`als`, `ltrf216a`, `ltr559`, `opt3001`, `apds9960`, `cm32181`, `stk3310`, …) by their

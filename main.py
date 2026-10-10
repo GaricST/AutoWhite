@@ -39,17 +39,53 @@ PLUGIN_MANIFEST = os.path.join(decky.DECKY_PLUGIN_DIR, "plugin.json")
 UPDATE_API = "https://api.github.com/repos/GaricST/AutoWhite/releases/latest"
 RELEASES_PAGE = "https://github.com/GaricST/AutoWhite/releases"
 
+# Модель консоли по DMI (Valve: Jupiter — LCD, Galileo — OLED; Lenovo: 83N0/83E1).
+DMI_FILES = (
+    "/sys/devices/virtual/dmi/id/product_name",
+    "/sys/devices/virtual/dmi/id/product_version",
+    "/sys/devices/virtual/dmi/id/board_name",
+    "/sys/devices/virtual/dmi/id/sys_vendor",
+)
+
+# Профили под конкретную панель и датчик. У Steam Deck датчик освещённости
+# показывает заметно больше люксов в той же комнате, чем у Legion, поэтому
+# пороги выше и максимум теплоты шире — иначе экран кажется недостаточно тёплым.
+DEVICE_PROFILES = (
+    (("jupiter", "galileo", "steam deck"),
+     {"max_warm": 0.400, "lux_dark": 30, "lux_bright": 900}),
+    (("83e1", "83n0", "83n1", "legion go"),
+     {"max_warm": 0.375, "lux_dark": 15, "lux_bright": 250}),
+)
+
 DEFAULTS = {
     "enabled": True,
     "warmth": 1.0,          # насколько теплее в темноте (0..1)
     "lux_dark": LUX_DARK,
     "lux_bright": LUX_BRIGHT,
     "max_warm": 0.3750,
+    "device": "",           # модель, под которую подставлен профиль
 }
 
 _last_state = {"lux": None, "white": None, "applied": False, "error": "",
                "sensor": None}
 _last_white = None
+
+
+def _device_profile():
+    """(модель, настройки профиля) под текущую консоль или ("", {})."""
+    text = []
+    for path in DMI_FILES:
+        try:
+            with open(path) as f:
+                text.append(f.read().strip())
+        except OSError:
+            continue
+    haystack = " ".join(text).lower()
+    for keys, values in DEVICE_PROFILES:
+        for key in keys:
+            if key in haystack:
+                return key, dict(values)
+    return "", {}
 
 
 def _read_int(path):
@@ -285,6 +321,20 @@ class Plugin:
         except Exception as exc:
             decky.logger.warning(f"autowhite: настройки не прочитаны ({exc})")
         self._sanitize()
+        self._apply_device_profile()
+
+    def _apply_device_profile(self):
+        """На новой консоли подставляет её профиль (пороги и максимум теплоты)."""
+        name, profile = _device_profile()
+        if not profile or self.settings.get("device") == name:
+            return
+        self.settings.update(profile)
+        self.settings["device"] = name
+        self._sanitize()
+        self._save()
+        decky.logger.info(
+            f"autowhite: профиль устройства {name} "
+            f"(теплота до {profile['max_warm']}, пороги {profile['lux_dark']}–{profile['lux_bright']} лк)")
 
     def _sanitize(self):
         self.settings["enabled"] = bool(self.settings.get("enabled", True))

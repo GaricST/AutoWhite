@@ -19,6 +19,10 @@
   / Russian and English UI, picked from the system language.
 - Самодостаточность: нужны только Decky Loader, `xprop`, `runuser`, gamescope и ALS.
   / Self-contained: Decky Loader, `xprop`, `runuser`, gamescope, ALS.
+- Профиль устройства по DMI: Steam Deck получает более тёплую кривую (0.400, пороги
+  30–900 лк), Legion Go — базовую (0.375, 15–250 лк).
+  / Per-device profile from DMI: Steam Deck gets a warmer curve (0.400, 30–900 lx),
+  Legion Go keeps the base one (0.375, 15–250 lx).
 - Самовосстановление: точка белого сверяется каждые 5 с, поэтому сброс после перезагрузки
   консоли или чужое вмешательство исправляются автоматически.
   / Self-healing: the white point is verified every 5 s, so a reset after a reboot or an
