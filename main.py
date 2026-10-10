@@ -2,9 +2,12 @@ import asyncio
 import glob
 import json
 import os
+import re
 import struct
 import subprocess
 import time
+import urllib.error
+import urllib.request
 
 import decky
 
@@ -16,7 +19,12 @@ SENSOR_INTERVAL = 1.0           # период опроса датчика, с
 TICK = 0.2                      # период плавного шага, с
 SMOOTH = 0.15                   # доля пути до цели за шаг (τ ≈ 1.2 с)
 DEADBAND = 0.0005               # мёртвая зона: мельче — не трогаем экран
+VERIFY_INTERVAL = 5.0           # как часто сверяем фактическую точку с нашей
+VERIFY_TOLERANCE = 0.001        # расхождение, которое считаем чужой правкой
 SETTINGS = os.path.join(decky.DECKY_PLUGIN_SETTINGS_DIR, "settings.json")
+PLUGIN_MANIFEST = os.path.join(decky.DECKY_PLUGIN_DIR, "plugin.json")
+UPDATE_API = "https://api.github.com/repos/GaricST/AutoWhite/releases/latest"
+RELEASES_PAGE = "https://github.com/GaricST/AutoWhite/releases"
 
 DEFAULTS = {
     "enabled": True,
@@ -92,6 +100,73 @@ def _write_white(point) -> bool:
         return False
 
 
+def _read_white():
+    """Фактическая точка белого из gamescope или None, если прочитать нельзя.
+
+    Нужна, чтобы заметить чужую правку: после перезагрузки консоли gamescope
+    создаёт атом заново (в нейтрали) уже после старта плагина, поэтому одного
+    «записать при старте» недостаточно.
+    """
+    try:
+        result = subprocess.run(
+            ["runuser", "-u", "deck", "--", "env", "DISPLAY=:0", "xprop", "-root", ATOM],
+            capture_output=True, timeout=5, text=True)
+        if result.returncode != 0 or "=" not in result.stdout:
+            return None
+        raw = result.stdout.split("=", 1)[1]
+        parts = [part.strip() for part in raw.split(",")][:2]
+        if len(parts) < 2:
+            return None
+        return tuple(round(struct.unpack("<f", struct.pack("<I", int(part)))[0], 4)
+                     for part in parts)
+    except (OSError, ValueError, subprocess.SubprocessError):
+        return None
+
+
+def _current_version():
+    try:
+        with open(PLUGIN_MANIFEST) as f:
+            return str(json.load(f).get("version") or "")
+    except (OSError, ValueError):
+        return ""
+
+
+def _version_key(text):
+    """«1.2.0-beta» < «1.2.0» < «1.2.1»: сначала числа, потом стабильная выше беты."""
+    text = str(text or "").strip().lstrip("vV")
+    main, _, suffix = text.partition("-")
+    nums = []
+    for part in main.split("."):
+        digits = re.match(r"\d+", part)
+        nums.append(int(digits.group(0)) if digits else 0)
+    while len(nums) < 3:
+        nums.append(0)
+    return (tuple(nums), 0 if suffix else 1, suffix)
+
+
+def _check_update():
+    """Спрашивает у GitHub последний релиз и сравнивает с установленной версией."""
+    current = _current_version()
+    try:
+        request = urllib.request.Request(
+            UPDATE_API,
+            headers={"User-Agent": "AutoWhite", "Accept": "application/vnd.github+json"})
+        with urllib.request.urlopen(request, timeout=10) as response:
+            data = json.loads(response.read().decode("utf-8"))
+    except urllib.error.HTTPError as exc:
+        return {"current": current, "error": str(exc), "code": exc.code,
+                "url": RELEASES_PAGE}
+    except Exception as exc:
+        return {"current": current, "error": str(exc), "url": RELEASES_PAGE}
+    latest = str(data.get("tag_name") or data.get("name") or "").lstrip("vV")
+    return {
+        "current": current,
+        "latest": latest,
+        "url": data.get("html_url") or RELEASES_PAGE,
+        "has_update": bool(latest) and _version_key(latest) > _version_key(current),
+    }
+
+
 def _approach(cur, want, smooth=SMOOTH, deadband=DEADBAND):
     """Один шаг плавного приближения к цели (экспоненциальное сглаживание).
 
@@ -164,6 +239,7 @@ class Plugin:
         global _last_white
         want = None
         last_read = 0.0
+        last_verify = 0.0
         last_logged = None
         prev_enabled = None
         while True:
@@ -184,6 +260,20 @@ class Plugin:
                     _last_state["lux"] = round(lux) if lux is not None else None
                     want = _target_white(settings, lux)
                     last_read = now
+                if now - last_verify >= VERIFY_INTERVAL:
+                    last_verify = now
+                    actual = await loop.run_in_executor(None, _read_white)
+                    if actual is not None and _last_white is not None:
+                        if (abs(actual[0] - _last_white[0]) > VERIFY_TOLERANCE
+                                or abs(actual[1] - _last_white[1]) > VERIFY_TOLERANCE):
+                            # Точку изменили извне (gamescope после перезагрузки,
+                            # ночной режим Steam, другой плагин) — возвращаем свою.
+                            decky.logger.info(
+                                f"autowhite: точку белого изменили извне "
+                                f"({actual[0]:.4f} / {actual[1]:.4f}) — возвращаю свою")
+                            _last_white = actual
+                            _last_state["white"] = actual
+                            last_logged = None
                 cur = _last_white
                 if want is not None:
                     # cur is None — первое применение после старта: без разгона.
@@ -264,6 +354,10 @@ class Plugin:
             elif not was_enabled and now_enabled:
                 decky.logger.info("autowhite: включено")
         return await self.get_state()
+
+    async def check_update(self) -> dict:
+        loop = asyncio.get_running_loop()
+        return await loop.run_in_executor(None, _check_update)
 
     async def reset_settings(self) -> dict:
         self.settings = dict(DEFAULTS)

@@ -19,6 +19,12 @@
   / Russian and English UI, picked from the system language.
 - Самодостаточность: нужны только Decky Loader, `xprop`, `runuser`, gamescope и ALS.
   / Self-contained: Decky Loader, `xprop`, `runuser`, gamescope, ALS.
+- Самовосстановление: точка белого сверяется каждые 5 с, поэтому сброс после перезагрузки
+  консоли или чужое вмешательство исправляются автоматически.
+  / Self-healing: the white point is verified every 5 s, so a reset after a reboot or an
+  external change is corrected automatically.
+- Кнопка **«Проверить обновление»** в панели: спрашивает у GitHub последний релиз.
+  / **Check for updates** button in the panel: asks GitHub for the latest release.
 
 **Установка / Install**
 

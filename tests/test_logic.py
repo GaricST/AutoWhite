@@ -9,8 +9,11 @@ import types
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
+PLUGIN_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+
 decky = types.ModuleType("decky")
 decky.DECKY_PLUGIN_SETTINGS_DIR = "/tmp/autowhite-test"
+decky.DECKY_PLUGIN_DIR = PLUGIN_DIR
 
 
 class _Log:
@@ -75,6 +78,14 @@ check("движение монотонное", all(seen[i][0] <= seen[i + 1][0] 
 check("мёртвая зона: мелкую разницу догоняем сразу",
       aw._approach((0.3749, 0.3749), (0.3750, 0.3750)), (0.3750, 0.3750))
 check("шаг не перескакивает цель", aw._approach((0.3740, 0.3740), (0.3760, 0.3760))[0] <= 0.3760, True)
+
+print("версии и обновления:")
+check("текущая версия из манифеста", aw._current_version(), "1.0.0")
+check("1.0.0 новее 0.9.9", aw._version_key("1.0.0") > aw._version_key("0.9.9"), True)
+check("1.0.1 новее 1.0.0", aw._version_key("1.0.1") > aw._version_key("1.0.0"), True)
+check("v1.0.0 = 1.0.0", aw._version_key("v1.0.0") == aw._version_key("1.0.0"), True)
+check("1.1.0 новее 1.1.0-beta", aw._version_key("1.1.0") > aw._version_key("1.1.0-beta"), True)
+check("одинаковые версии равны", aw._version_key("1.0.0") == aw._version_key("1.0.0"), True)
 
 print("санитизация:")
 p = aw.Plugin()

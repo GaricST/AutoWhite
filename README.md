@@ -40,6 +40,9 @@ white point atom `GAMESCOPE_DISPLAY_VIRTUAL_WHITE` (CIE 1931 x/y):
 - **Enable / disable toggle** — switching the plugin off restores the neutral D65 point
 - **Cooler — Warmer slider** — how warm the dark end becomes (0…100 %)
 - **Live status** — current illuminance and the current white point
+- **Restores itself if the point is changed** — the atom is read back every 5 s, so a reset
+  by gamescope after a reboot (or by Steam's night mode) is corrected automatically
+- **Update check** — a button in the panel asks GitHub for the latest release
 - **English / Russian UI**, chosen automatically from the system language
 - **Self-contained** — no daemons, no network, no dependency on other plugins
 
@@ -50,6 +53,7 @@ white point atom `GAMESCOPE_DISPLAY_VIRTUAL_WHITE` (CIE 1931 x/y):
 | Ambient light | `/sys/bus/iio/devices/iio:device*` where `name` is `als`; channels `in_illuminance_raw` / `in_intensity_both_raw` |
 | White point | gamescope root atom `GAMESCOPE_DISPLAY_VIRTUAL_WHITE` — two CARDINALs holding the float32 bits of x and y |
 | Writing it | `runuser -u deck -- env DISPLAY=:0 xprop -root -f GAMESCOPE_DISPLAY_VIRTUAL_WHITE 32c -set … "bits_x, bits_y"` |
+| Verification | every 5 s the atom is read back; a difference over 0.001 means someone else changed it, and the plugin glides back to its target |
 | Settings | `$DECKY_PLUGIN_SETTINGS_DIR/settings.json` |
 | Logs | `$DECKY_PLUGIN_LOG_DIR` (one file per plugin start) |
 
@@ -67,6 +71,7 @@ Dark-end mapping: `warm = NEUTRAL + (max_warm − NEUTRAL) × warmth`, `NEUTRAL 
 | **Enabled** | master switch |
 | **Cooler — Warmer** | 0…100 % — the maximum warmth reached in the dark |
 | **State** | current illuminance and the current white point |
+| **Updates** | **Check for updates** — asks GitHub for the latest release and shows the result |
 
 ## Installation
 

@@ -13,6 +13,7 @@ const definePlugin = (fn) => (...args) => fn(...args);
 const getState = callable("get_state");
 const setSettings = callable("set_settings");
 const resetSettings = callable("reset_settings");
+const checkUpdate = callable("check_update");
 
 const LANG = (() => {
     const raw = (navigator.language || (navigator.languages && navigator.languages[0]) || "en").toLowerCase();
@@ -29,7 +30,15 @@ const S = {
     white: ["Точка белого", "White point"],
     neutral: ["нейтральная", "neutral"],
     noSensor: ["датчик не найден", "sensor not found"],
-    luxUnit: [" лк", " lx"]
+    luxUnit: [" лк", " lx"],
+    update: ["Обновления", "Updates"],
+    updateButton: ["Проверить обновление", "Check for updates"],
+    updateChecking: ["Проверяю...", "Checking..."],
+    updateStatus: ["Версия", "Version"],
+    updateNone: ["Обновлений нет", "No updates"],
+    updateAvailable: ["Доступна версия", "Version available"],
+    updateNoReleases: ["Релизов на GitHub пока нет", "No releases on GitHub yet"],
+    updateError: ["Не удалось проверить — нет связи с GitHub", "Check failed — no connection to GitHub"]
 };
 const t = (key) => { const v = S[key]; return Array.isArray(v) ? v[LANG === "ru" ? 0 : 1] : key; };
 
@@ -39,6 +48,8 @@ const section = (title, children, key) => SP_JSX.jsx(DFL.PanelSection, { title: 
 const Content = () => {
     const [state, setState] = SP_REACT.useState({});
     const [settings, setLocal] = SP_REACT.useState(null);
+    const [updateBusy, setUpdateBusy] = SP_REACT.useState(false);
+    const [updateText, setUpdateText] = SP_REACT.useState("");
     const pending = SP_REACT.useRef(null);
     const timer = SP_REACT.useRef(null);
 
@@ -68,6 +79,22 @@ const Content = () => {
         if (timer.current) clearTimeout(timer.current);
         timer.current = setTimeout(() => { timer.current = null; flush(); }, 400);
     }, [flush]);
+
+    const runUpdateCheck = async () => {
+        if (updateBusy) return;
+        setUpdateBusy(true);
+        setUpdateText(t("updateChecking"));
+        let data = null;
+        try { data = await checkUpdate(); } catch (e) { }
+        setUpdateBusy(false);
+        if (!data || data.error) {
+            setUpdateText(data && data.code === 404 ? t("updateNoReleases") : t("updateError"));
+        } else if (data.has_update) {
+            setUpdateText(t("updateAvailable") + " " + (data.latest || "?"));
+        } else {
+            setUpdateText(t("updateNone") + " (" + (data.current || "?") + ")");
+        }
+    };
 
     if (!settings) return SP_JSX.jsx("div", { children: "" });
 
@@ -101,7 +128,21 @@ const Content = () => {
             section(t("state"), [
                 row(SP_JSX.jsx(DFL.Field, { label: t("lux"), children: luxText }), "lux"),
                 row(SP_JSX.jsx(DFL.Field, { label: t("white"), children: whiteText }), "wp")
-            ], "state")
+            ], "state"),
+            section(t("update"), [
+                row(SP_JSX.jsx(DFL.ButtonItem, {
+                    layout: "below",
+                    bottomSeparator: updateText ? "standard" : "none",
+                    disabled: updateBusy,
+                    children: updateBusy ? t("updateChecking") : t("updateButton"),
+                    onClick: runUpdateCheck
+                }), "update-button"),
+                updateText
+                    ? row(SP_JSX.jsx(DFL.Field, {
+                        label: t("updateStatus"), children: updateText
+                    }), "update-result")
+                    : null
+            ].filter(Boolean), "update")
         ]
     });
 };
