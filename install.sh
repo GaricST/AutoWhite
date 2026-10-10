@@ -50,7 +50,9 @@ else
         echo "Нужен curl или wget." >&2
         exit 1
     fi
-    tar -xzf "$TMP/src.tar.gz" -C "$TMP"
+    # -m: не восстанавливать метки времени из архива (иначе GNU tar ругается
+    # на «time stamp in the future», когда часы устройства и GitHub расходятся).
+    tar -xzmf "$TMP/src.tar.gz" -C "$TMP"
     SRC="$TMP/$PLUGIN-$BRANCH"
     [ -f "$SRC/plugin.json" ] || { echo "В архиве нет plugin.json." >&2; exit 1; }
     echo "==> Источник: $REPO@$BRANCH"
