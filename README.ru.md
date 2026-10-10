@@ -1,4 +1,4 @@
-![AutoWhite](img/banner.png)
+![AutoWhite — точка белого по датчику освещённости](img/banner-ru.png)
 
 # AutoWhite
 
@@ -112,7 +112,8 @@ main.py              backend: чтение датчика, расчёт точк
 dist/index.js        собранный frontend панели, коммитится как есть — шаг сборки не нужен
 tests/test_logic.py  тесты: расчёт точки белого, сглаживание, санитизация настроек
 assets/icon.svg      иконка плагина
-img/banner.png       картинка-шапка для этого README
+img/banner-ru.png    картинка-шапка (русская) для этого README
+img/banner-en.png    картинка-шапка (английская) для README.md
 install.sh           установка / обновление из этой папки на консоли
 logs/                примеры логов с устройства разработки
 ```

@@ -1,4 +1,4 @@
-![AutoWhite](img/banner.png)
+![AutoWhite — ambient-light adaptive white point for gamescope](img/banner-en.png)
 
 # AutoWhite
 
@@ -111,7 +111,8 @@ main.py              backend: sensor read, white-point maths, gamescope write, p
 dist/index.js        frontend bundle (Decky panel UI), committed as-is — no build step
 tests/test_logic.py  unit tests: white-point maths, smoothing, settings sanitisation
 assets/icon.svg      plugin icon
-img/banner.png       header image for this README
+img/banner-en.png    header image (English) for this README
+img/banner-ru.png    header image (Russian) for README.ru.md
 install.sh           install / update from this folder on the device
 logs/                sample logs from the development device
 ```
