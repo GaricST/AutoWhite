@@ -13,6 +13,10 @@ A [Decky Loader](https://github.com/SteamDeckHomebrew/decky-loader) plugin that 
 **display white point in step with the ambient light**: warmer when the room is dark,
 neutral in bright light. Brightness is never touched — only the colour temperature of white.
 
+The idea is the same as Apple's **True Tone** on the iPhone and iPad: the display's white
+balance follows the light in the room. AutoWhite brings that behaviour to SteamOS handhelds
+through gamescope's virtual white point — no schedule, no manual switching.
+
 ## What it does
 
 The plugin reads the handheld's ambient light sensor (ALS) and drives gamescope's virtual
