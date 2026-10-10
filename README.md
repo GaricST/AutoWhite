@@ -21,8 +21,9 @@ white point atom `GAMESCOPE_DISPLAY_VIRTUAL_WHITE` (CIE 1931 x/y):
 
 - **Sensor-driven** — the ambient light sensor sets the white point automatically; no
   schedule, no manual switching
-- **Warm in the dark, neutral in bright light**, with smooth transitions (0.004 per step,
-  3 s polling) and an instant apply when the difference is large
+- **Warm in the dark, neutral in bright light** — the point glides to the target
+  exponentially (0.2 s tick, sensor polled once a second), so flipping a light switch does
+  not produce a visible jump
 - **Applies immediately at boot** — Decky loads the plugin at startup and the white point
   is set before the panel is ever opened
 - **Enable / disable toggle** — switching the plugin off restores the neutral D65 point
@@ -90,10 +91,21 @@ and runs gamescope should work; other devices are untested.
 plugin.json          Decky manifest (name, version, entry points)
 main.py              backend: sensor read, white-point maths, gamescope write, panel API
 dist/index.js        frontend bundle (Decky panel UI), committed as-is — no build step
+tests/test_logic.py  unit tests: white-point maths, smoothing, settings sanitisation
 assets/icon.svg      plugin icon
 install.sh           install / update from this folder on the device
 logs/                sample logs from the development device
 ```
+
+## Tests
+
+```bash
+python3 tests/test_logic.py
+```
+
+The tests stub the `decky` module, so they run anywhere — no handheld required. They cover
+the white-point maths (dark/bright thresholds, D65, warmth scaling), the exponential
+smoothing step and settings sanitisation.
 
 ## Similar projects
 
@@ -117,8 +129,8 @@ automatically**, without a schedule and without user input.
 
 - If Steam's own night mode is enabled, both effects add up — AutoWhite does not read
   `GAMESCOPE_COLOR_NIGHT_MODE`.
-- Legacy schedule settings (`source`, `night_from`, `night_to`) remain in
-  `settings.json` for compatibility but are not exposed in the panel.
+- `settings.json` keeps only known keys: anything left over from older builds is ignored
+  on load and dropped on the next save.
 - Brightness is deliberately untouched: use the system slider or a brightness plugin.
 - The sensor must be exposed to SteamOS. On some firmware revisions it may report 0 lx
   until the panel is active.

@@ -12,8 +12,10 @@ ATOM = "GAMESCOPE_DISPLAY_VIRTUAL_WHITE"
 NEUTRAL = (0.3128, 0.3292)      # D65
 LUX_DARK = 15.0                 # темнее — самая тёплая
 LUX_BRIGHT = 250.0              # светлее — нейтральная
-STEP = 0.004                    # плавность: шаг за проход
-INTERVAL = 3.0                  # период опроса датчика
+SENSOR_INTERVAL = 1.0           # период опроса датчика, с
+TICK = 0.2                      # период плавного шага, с
+SMOOTH = 0.15                   # доля пути до цели за шаг (τ ≈ 1.2 с)
+DEADBAND = 0.0005               # мёртвая зона: мельче — не трогаем экран
 SETTINGS = os.path.join(decky.DECKY_PLUGIN_SETTINGS_DIR, "settings.json")
 
 DEFAULTS = {
@@ -21,9 +23,6 @@ DEFAULTS = {
     "warmth": 1.0,          # насколько теплее в темноте (0..1)
     "lux_dark": LUX_DARK,
     "lux_bright": LUX_BRIGHT,
-    "source": "sensor",     # sensor | schedule
-    "night_from": 21,       # час начала «тёплого» расписания
-    "night_to": 7,          # час окончания
     "max_warm": 0.3750,
 }
 
@@ -93,23 +92,30 @@ def _write_white(point) -> bool:
         return False
 
 
+def _approach(cur, want, smooth=SMOOTH, deadband=DEADBAND):
+    """Один шаг плавного приближения к цели (экспоненциальное сглаживание).
+
+    Возвращает новую точку белого: чем дальше цель, тем крупнее шаг, поэтому
+    переход идёт ровно, без ступенек и без мгновенных скачков.
+    """
+    if abs(want[0] - cur[0]) <= deadband and abs(want[1] - cur[1]) <= deadband:
+        return want
+    nxt = (round(cur[0] + (want[0] - cur[0]) * smooth, 4),
+           round(cur[1] + (want[1] - cur[1]) * smooth, 4))
+    return nxt if nxt != cur else want
+
+
 def _target_white(settings, lux):
     """Куда вести точку белого: (x, y) или None, если данных нет."""
+    if lux is None:
+        return None
     warmth = max(0.0, min(1.0, float(settings.get("warmth", 1.0))))
-    warm = (NEUTRAL[0] + (float(settings.get("max_warm", 0.375)) - NEUTRAL[0]) * warmth,
-            NEUTRAL[1] + (float(settings.get("max_warm", 0.375)) - NEUTRAL[1]) * warmth)
-    if settings.get("source") == "schedule":
-        hour = time.localtime().tm_hour
-        night_from = int(settings.get("night_from", 21))
-        night_to = int(settings.get("night_to", 7))
-        night = hour >= night_from or hour < night_to
-        t = 0.0 if night else 1.0
-    else:
-        if lux is None:
-            return None
-        dark = float(settings.get("lux_dark", LUX_DARK))
-        bright = max(dark + 1.0, float(settings.get("lux_bright", LUX_BRIGHT)))
-        t = max(0.0, min(1.0, (lux - dark) / (bright - dark)))
+    max_warm = float(settings.get("max_warm", 0.375))
+    warm = (NEUTRAL[0] + (max_warm - NEUTRAL[0]) * warmth,
+            NEUTRAL[1] + (max_warm - NEUTRAL[1]) * warmth)
+    dark = float(settings.get("lux_dark", LUX_DARK))
+    bright = max(dark + 1.0, float(settings.get("lux_bright", LUX_BRIGHT)))
+    t = max(0.0, min(1.0, (lux - dark) / (bright - dark)))
     return (round(warm[0] + (NEUTRAL[0] - warm[0]) * t, 4),
             round(warm[1] + (NEUTRAL[1] - warm[1]) * t, 4))
 
@@ -124,7 +130,10 @@ class Plugin:
             with open(SETTINGS) as f:
                 stored = json.load(f)
             if isinstance(stored, dict):
-                self.settings.update(stored)
+                # Берём только известные ключи: старые версии писали лишнее.
+                for key in DEFAULTS:
+                    if key in stored:
+                        self.settings[key] = stored[key]
         except FileNotFoundError:
             pass
         except Exception as exc:
@@ -139,12 +148,8 @@ class Plugin:
             self.settings["lux_dark"] = max(0, int(self.settings.get("lux_dark", LUX_DARK)))
             self.settings["lux_bright"] = max(
                 self.settings["lux_dark"] + 1, int(self.settings.get("lux_bright", LUX_BRIGHT)))
-            self.settings["night_from"] = max(0, min(23, int(self.settings.get("night_from", 21))))
-            self.settings["night_to"] = max(0, min(23, int(self.settings.get("night_to", 7))))
         except (TypeError, ValueError):
             self.settings.update(DEFAULTS)
-        if self.settings.get("source") not in ("sensor", "schedule"):
-            self.settings["source"] = "sensor"
 
     def _save(self):
         try:
@@ -157,37 +162,44 @@ class Plugin:
     async def _loop(self):
         loop = asyncio.get_running_loop()
         global _last_white
+        want = None
+        last_read = 0.0
+        last_logged = None
+        prev_enabled = None
         while True:
             try:
                 if os.getppid() == 1:
                     decky.logger.warning("autowhite: Decky перезапущен, выходим")
                     os._exit(0)
                 settings = self.settings
-                if not settings.get("enabled", True):
-                    await asyncio.sleep(2.0)
-                    continue
-                lux = await loop.run_in_executor(None, _read_als_lux)
-                _last_state["lux"] = round(lux) if lux is not None else None
-                want = _target_white(settings, lux)
+                now = time.monotonic()
+                enabled = bool(settings.get("enabled", True))
+                if enabled != prev_enabled:
+                    prev_enabled = enabled
+                    last_read = 0.0          # после переключения читаем датчик сразу
+                if not enabled:
+                    want = NEUTRAL
+                elif now - last_read >= SENSOR_INTERVAL:
+                    lux = await loop.run_in_executor(None, _read_als_lux)
+                    _last_state["lux"] = round(lux) if lux is not None else None
+                    want = _target_white(settings, lux)
+                    last_read = now
+                cur = _last_white
                 if want is not None:
-                    cur = _last_white
-                    if cur is None or abs(want[0] - cur[0]) > 0.02:
-                        step = want          # большая разница — применяем сразу
-                    else:
-                        dx = max(-STEP, min(STEP, want[0] - cur[0]))
-                        dy = max(-STEP, min(STEP, want[1] - cur[1]))
-                        step = (round(cur[0] + dx, 4), round(cur[1] + dy, 4))
-                    if cur is None or step != cur:
+                    # cur is None — первое применение после старта: без разгона.
+                    step = want if cur is None else _approach(cur, want)
+                    if step != cur:
                         if await loop.run_in_executor(None, _write_white, step):
-                            if _last_state["white"] != step:
-                                decky.logger.info(
-                                    f"autowhite: точка белого {step[0]:.3f} / "
-                                    f"{step[1]:.3f} (люкс {_last_state['lux']})")
                             _last_white = step
                             _last_state["white"] = step
                             _last_state["applied"] = True
                             _last_state["error"] = ""
-                await asyncio.sleep(INTERVAL)
+                            if last_logged is None or abs(step[0] - last_logged[0]) >= 0.002:
+                                last_logged = step
+                                decky.logger.info(
+                                    f"autowhite: точка белого {step[0]:.4f} / "
+                                    f"{step[1]:.4f} (люкс {_last_state['lux']})")
+                await asyncio.sleep(TICK)
             except asyncio.CancelledError:
                 raise
             except Exception as exc:
@@ -199,8 +211,7 @@ class Plugin:
     async def _main(self):
         self._load()
         decky.logger.info(
-            f"autowhite: старт (источник {self.settings.get('source')}, "
-            f"теплота {self.settings.get('warmth')}, "
+            f"autowhite: старт (теплота {self.settings.get('warmth')}, "
             f"{'включено' if self.settings.get('enabled') else 'выключено'})")
         global _last_white
         loop = asyncio.get_running_loop()
@@ -238,8 +249,6 @@ class Plugin:
         }
 
     async def set_settings(self, patch: dict) -> dict:
-        global _last_white
-        loop = asyncio.get_running_loop()
         if isinstance(patch, dict):
             was_enabled = bool(self.settings.get("enabled", True))
             for key in DEFAULTS:
@@ -248,24 +257,12 @@ class Plugin:
             self._sanitize()
             self._save()
             now_enabled = bool(self.settings.get("enabled", True))
-            if not now_enabled:
-                # Выключили — возвращаем нейтральную точку сразу.
-                _last_white = NEUTRAL
-                _last_state["white"] = NEUTRAL
-                await loop.run_in_executor(None, _write_white, NEUTRAL)
-                if was_enabled:
-                    decky.logger.info("autowhite: выключено, точка белого нейтральная")
-            elif not was_enabled:
-                # Включили — применяем немедленно, не ждём цикла.
-                lux = await loop.run_in_executor(None, _read_als_lux)
-                want = _target_white(self.settings, lux)
-                if want is not None and await loop.run_in_executor(None, _write_white, want):
-                    _last_white = want
-                    _last_state["white"] = want
-                    _last_state["lux"] = round(lux) if lux is not None else None
-                    decky.logger.info(
-                        f"autowhite: включено, точка белого {want[0]:.3f} / "
-                        f"{want[1]:.3f} (люкс {_last_state['lux']})")
+            # К экрану не прикасаемся: цикл сам плавно сведёт точку белого
+            # к новой цели (к нейтральной — при выключении).
+            if was_enabled and not now_enabled:
+                decky.logger.info("autowhite: выключено, возвращаю нейтральную точку")
+            elif not was_enabled and now_enabled:
+                decky.logger.info("autowhite: включено")
         return await self.get_state()
 
     async def reset_settings(self) -> dict:

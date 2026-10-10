@@ -23,23 +23,13 @@ const S = {
     title: ["Точка белого", "White point"],
     enabled: ["Включено", "Enabled"],
     enabledDesc: ["Экран теплее в темноте и нейтральнее при ярком свете", "Warmer in the dark, neutral in bright light"],
-    source: ["Источник", "Source"],
-    sourceSensor: ["Датчик освещённости", "Ambient light sensor"],
-    sourceSchedule: ["Расписание", "Schedule"],
     warmth: ["Холоднее — Теплее", "Cooler — Warmer"],
-    luxDark: ["Темно, лк", "Dark, lux"],
-    luxBright: ["Светло, лк", "Bright, lux"],
-    nightFrom: ["Ночь с, час", "Night from, hour"],
-    nightTo: ["Ночь до, час", "Night to, hour"],
     state: ["Состояние", "State"],
     lux: ["Освещённость", "Illuminance"],
     white: ["Точка белого", "White point"],
     neutral: ["нейтральная", "neutral"],
     noSensor: ["датчик не найден", "sensor not found"],
-    reset: ["Сбросить", "Reset"],
-    help: ["Как это работает", "How it works"],
-    helpText: ["Плагин читает датчик освещённости и пишет виртуальную точку белого в gamescope: в темноте экран теплее, при ярком свете нейтральнее. Яркость не меняется.",
-        "The plugin reads the ambient light sensor and writes the gamescope virtual white point: the screen is warmer in the dark and more neutral in bright light. Brightness is untouched."]
+    luxUnit: [" лк", " lx"]
 };
 const t = (key) => { const v = S[key]; return Array.isArray(v) ? v[LANG === "ru" ? 0 : 1] : key; };
 
@@ -86,8 +76,7 @@ const Content = () => {
         ? st.white[0].toFixed(4) + " / " + st.white[1].toFixed(4)
         : t("neutral");
     const luxText = (st.lux === null || st.lux === undefined)
-        ? t("noSensor") : st.lux + (LANG === "ru" ? " лк" : " lx");
-    const sensor = settings.source !== "schedule";
+        ? t("noSensor") : st.lux + t("luxUnit");
 
     const controls = [
         row(SP_JSX.jsx(DFL.ToggleField, {
@@ -99,8 +88,8 @@ const Content = () => {
             label: t("warmth"), value: Math.round((settings.warmth || 0) * 100),
             min: 0, max: 100, step: 5, showValue: true,
             onChange: (v) => {
-                // Панель иногда дёргает onChange при отрисовке: пишем только
-                // если значение действительно изменилось.
+                // The Decky panel sometimes fires onChange while rendering, so
+                // only write when the value really changed.
                 if (Math.round((settings.warmth || 0) * 100) !== v) patch({ warmth: v / 100 });
             }
         }), "warm")

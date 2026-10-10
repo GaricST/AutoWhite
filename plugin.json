@@ -1,6 +1,6 @@
 {
   "name": "AutoWhite",
-  "author": "Igor",
+  "author": "GaricST",
   "flags": [
     "root"
   ],
@@ -13,6 +13,6 @@
       "utilities",
       "hardware"
     ],
-    "description": "Точка белого экрана подстраивается под освещение в комнате (датчик яркости) или по расписанию."
+    "description": "Ambient-light adaptive white point for gamescope: warmer in the dark, neutral in bright light. Brightness is untouched."
   }
 }
