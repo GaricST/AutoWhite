@@ -26,9 +26,13 @@
 - Кнопка **«Проверить обновление»** в панели: спрашивает у GitHub последний релиз.
   / **Check for updates** button in the panel: asks GitHub for the latest release.
 - Переносимость: пользователь сессии берётся из `DECKY_USER` (не жёстко «deck»),
-  X-дисплей определяется автоматически, поддерживаются разные названия каналов датчика.
+  X-дисплей определяется автоматически, датчик освещённости ищется по каналу
+  `in_illuminance_*` и по известным драйверам света (Steam Deck — `ltrf216a` и др.),
+  выбранный датчик пишется в лог.
   / Portability: the session user comes from `DECKY_USER` (not a hard-coded `deck`),
-  the X display is auto-detected, and several ALS channel names are supported.
+  the X display is auto-detected, and the light sensor is found by its `in_illuminance_*`
+  channel or by known light-sensor drivers (Steam Deck — `ltrf216a` etc.); the chosen
+  sensor is logged.
 
 **Установка / Install**
 

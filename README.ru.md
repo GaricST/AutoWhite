@@ -114,18 +114,42 @@ Decky. Для обновления — та же команда.
 |---|---|---|
 | Lenovo Legion Go 2 (SteamOS) | есть | **проверено** |
 | Lenovo Legion Go | есть | ожидается работа |
-| Steam Deck LCD / OLED | **датчика нет** | ставится и работает, но читать нечего — панель покажет «датчик не найден», экран не трогается |
-| ROG Ally / Ally X | датчика нет | то же самое |
+| Steam Deck LCD / OLED | есть — Valve указывает ALS в спецификациях обеих моделей | ожидается работа; драйвер другой (`ltrf216a`), поэтому датчик ищется по каналу освещённости, а не по фиксированному имени |
+| ROG Ally / Ally X | в спецификациях датчика нет | ставится и работает, но читать нечего — панель покажет «датчик не найден», экран не трогается |
 | Другие консоли со SteamOS | зависит от модели | работает, если в `/sys/bus/iio/devices` есть устройство `als` |
 
 Плагин не ломает экран: без датчика он просто ничего не делает. Он также не привязан к
 конкретному имени пользователя или дисплею — пользователь сессии берётся из Decky
 (`DECKY_USER`), а X-дисплей определяется автоматически (`:0`, `:1`, …).
 
-Названия каналов у датчиков различаются, поэтому пробуются несколько:
-`in_illuminance_raw`, `in_illuminance_input`, `in_intensity_both_raw`,
-`in_intensity_clear_raw`, `in_intensity_raw`. Если ваш датчик отдаёт другую шкалу,
-пороги `lux_dark` / `lux_bright` можно поправить в `settings.json`.
+Про Steam Deck: Valve указывает ALS у обеих моделей —
+[LCD](https://www.steamdeck.com/en/tech/deck) и
+[OLED](https://www.steamdeck.com/en/tech/oled) (на OLED двойной). Драйвер в ядре —
+`ltrf216a`, и именно его `in_illuminance_input` использует сама SteamOS для
+автояркости ([патч в LKML](https://lkml.org/lkml/2022/8/12/262)); владельцы подтверждают,
+что датчик виден и на LCD, и на OLED как `/sys/bus/iio/devices/iio*/in_illuminance_*`
+([Jovian-NixOS #271](https://github.com/Jovian-Experiments/Jovian-NixOS/issues/271)).
+Атом `GAMESCOPE_DISPLAY_VIRTUAL_WHITE` обрабатывается в общем коде gamescope
+([steamcompmgr.cpp](https://github.com/ValveSoftware/gamescope/blob/master/src/steamcompmgr.cpp)),
+то есть механизм доступен и на Deck.
+
+Датчики у консолей разные, поэтому плагин принимает любое IIO-устройство с каналом
+`in_illuminance_*`, а также знает популярные драйверы датчиков света
+(`als`, `ltrf216a`, `ltr559`, `opt3001`, `apds9960`, `cm32181`, `stk3310`, …) и их каналы
+интенсивности: `in_intensity_both_raw`, `in_intensity_clear_raw`, `in_intensity_raw`.
+
+Посмотреть, что есть на вашем устройстве:
+
+```bash
+for d in /sys/bus/iio/devices/iio:device*; do
+  echo "$d: $(cat "$d/name" 2>/dev/null)"
+  ls "$d" | grep -E "illuminance|intensity" | sed 's/^/    /'
+done
+```
+
+Плагин пишет в лог, какой датчик выбрал: `autowhite: датчик освещённости <устройство>/<канал>`.
+Если ваш датчик отдаёт другую шкалу, пороги `lux_dark` / `lux_bright` можно поправить
+в `settings.json`.
 
 ## Структура репозитория
 

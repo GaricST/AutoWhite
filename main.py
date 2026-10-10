@@ -15,9 +15,16 @@ ATOM = "GAMESCOPE_DISPLAY_VIRTUAL_WHITE"
 # Пользователь, которому принадлежит X-сервер gamescope. Decky даёт его в
 # DECKY_USER (на SteamOS — deck); если переменной нет, пробуем «deck».
 SESSION_USER = str(getattr(decky, "DECKY_USER", "") or "deck")
-# Каналы датчика освещённости: у разных консолей названия отличаются.
-ALS_CHANNELS = ("in_illuminance_raw", "in_illuminance_input",
-                "in_intensity_both_raw", "in_intensity_clear_raw", "in_intensity_raw")
+# Датчики света: у консолей разные драйверы (Legion — HID «als», Steam Deck —
+# ltrf216a и другие). Канал in_illuminance_* однозначно означает освещённость,
+# поэтому его ищем у любого устройства, а каналы интенсивности — только у
+# известных драйверов света.
+# Сначала обработанный ядром канал (в люксах), затем «сырой» — у части драйверов
+# (например, ltrf216a на Steam Deck) raw отдаёт не люксы.
+LUX_CHANNELS = ("in_illuminance_input", "in_illuminance_raw")
+INTENSITY_CHANNELS = ("in_intensity_both_raw", "in_intensity_clear_raw", "in_intensity_raw")
+ALS_NAMES = ("als", "ltrf216a", "ltr559", "ltr301", "opt3001", "opt3004", "opt4001",
+             "apds9960", "isl29023", "cm32181", "stk3310", "gp2ap002", "bh1750")
 NEUTRAL = (0.3128, 0.3292)      # D65
 LUX_DARK = 15.0                 # темнее — самая тёплая
 LUX_BRIGHT = 250.0              # светлее — нейтральная
@@ -40,7 +47,8 @@ DEFAULTS = {
     "max_warm": 0.3750,
 }
 
-_last_state = {"lux": None, "white": None, "applied": False, "error": ""}
+_last_state = {"lux": None, "white": None, "applied": False, "error": "",
+               "sensor": None}
 _last_white = None
 
 
@@ -52,18 +60,59 @@ def _read_int(path):
         return None
 
 
+def _note_sensor(source):
+    if _last_state.get("sensor") != source:
+        _last_state["sensor"] = source
+        decky.logger.info(f"autowhite: датчик освещённости {source}")
+
+
+def _combine_lux(values):
+    """Несколько датчиков света: при близких показаниях — среднее, иначе первый.
+
+    Двойной ALS есть, например, в Steam Deck OLED.
+    """
+    if not values:
+        return None
+    if len(values) > 1 and min(values) > 0 and max(values) <= min(values) * 4:
+        return sum(values) / len(values)
+    return values[0]
+
+
 def _read_als_lux():
     """Освещённость в люксах или None, если датчика нет."""
-    for directory in sorted(glob.glob("/sys/bus/iio/devices/iio:device*")):
+    devices = sorted(glob.glob("/sys/bus/iio/devices/iio:device*"))
+    # 1. Любой датчик с каналом освещённости — это точно ALS.
+    readings = []
+    for directory in devices:
+        # Обработанный канал (люксы) предпочтительнее; если он пуст или нулевой,
+        # а «сырой» даёт значение — берём сырой (бывает у ltrf216a на старте).
+        processed = _read_int(os.path.join(directory, LUX_CHANNELS[0]))
+        raw = _read_int(os.path.join(directory, LUX_CHANNELS[1]))
+        if processed not in (None, 0):
+            channel, value = LUX_CHANNELS[0], processed
+        elif raw is not None:
+            channel, value = LUX_CHANNELS[1], raw
+        elif processed is not None:
+            channel, value = LUX_CHANNELS[0], processed
+        else:
+            continue
+        readings.append((os.path.basename(directory) + "/" + channel, float(value)))
+    if readings:
+        _note_sensor(" + ".join(name for name, _ in readings))
+        return _combine_lux([value for _, value in readings])
+    # 2. Известные драйверы света: у них бывает только канал интенсивности.
+    for directory in devices:
         try:
             with open(os.path.join(directory, "name")) as f:
-                if f.read().strip() != "als":
-                    continue
+                name = f.read().strip()
         except OSError:
             continue
-        for channel in ALS_CHANNELS:
+        if name.lower() not in ALS_NAMES:
+            continue
+        for channel in INTENSITY_CHANNELS:
             value = _read_int(os.path.join(directory, channel))
             if value is not None:
+                _note_sensor(name + "/" + channel)
                 return float(value)
     return None
 

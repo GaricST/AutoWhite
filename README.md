@@ -113,18 +113,40 @@ The plugin registers the `root` flag, because it writes an X property and reads 
 |---|---|---|
 | Lenovo Legion Go 2 (SteamOS) | yes | **verified** |
 | Lenovo Legion Go | yes | expected to work |
-| Steam Deck LCD / OLED | **no ALS** | installs and runs, but there is nothing to read — the panel shows "sensor not found" and the screen is left alone |
-| ROG Ally / Ally X | no ALS | same as above |
+| Steam Deck LCD / OLED | yes — Valve lists an ALS in the specs of both models | expected to work; the driver differs (`ltrf216a`), so the sensor is found by its illuminance channel, not by a fixed name |
+| ROG Ally / Ally X | not listed in the specs | installs and runs, but there is nothing to read — the panel shows "sensor not found" and the screen is left alone |
 | Other SteamOS handhelds | depends on the model | works if `/sys/bus/iio/devices` exposes an `als` device |
 
 The plugin never breaks the screen: without a sensor it simply does nothing. It is not tied
 to a particular user name or display either — the session user comes from Decky
 (`DECKY_USER`) and the X display is detected (`:0`, `:1`, …).
 
-Channel names differ between sensors, so several are tried:
-`in_illuminance_raw`, `in_illuminance_input`, `in_intensity_both_raw`,
-`in_intensity_clear_raw`, `in_intensity_raw`. If your sensor reports on a different
-scale, the thresholds `lux_dark` / `lux_bright` can be adjusted in
+Steam Deck notes: Valve lists an ALS for both models — [LCD](https://www.steamdeck.com/en/tech/deck)
+and [OLED](https://www.steamdeck.com/en/tech/oled) (dual ALS on OLED). The kernel driver is
+`ltrf216a`, whose `in_illuminance_input` is exactly what SteamOS itself uses for
+auto-brightness ([LKML patch](https://lkml.org/lkml/2022/8/12/262)); owners confirm the sensor
+is visible on both LCD and OLED as `/sys/bus/iio/devices/iio*/in_illuminance_*`
+([Jovian-NixOS #271](https://github.com/Jovian-Experiments/Jovian-NixOS/issues/271)).
+gamescope handles the `GAMESCOPE_DISPLAY_VIRTUAL_WHITE` atom in its shared code
+([steamcompmgr.cpp](https://github.com/ValveSoftware/gamescope/blob/master/src/steamcompmgr.cpp)),
+so the same mechanism is available on the Deck.
+
+Sensors differ between devices, so the plugin accepts any IIO device with an
+`in_illuminance_*` channel, and also knows common light-sensor drivers
+(`als`, `ltrf216a`, `ltr559`, `opt3001`, `apds9960`, `cm32181`, `stk3310`, …) by their
+intensity channels: `in_intensity_both_raw`, `in_intensity_clear_raw`, `in_intensity_raw`.
+
+To see what your device exposes:
+
+```bash
+for d in /sys/bus/iio/devices/iio:device*; do
+  echo "$d: $(cat "$d/name" 2>/dev/null)"
+  ls "$d" | grep -E "illuminance|intensity" | sed 's/^/    /'
+done
+```
+
+The plugin logs the sensor it picked: `autowhite: датчик освещённости <device>/<channel>`.
+If your sensor reports on a different scale, adjust `lux_dark` / `lux_bright` in
 `settings.json`.
 
 ## Repository layout

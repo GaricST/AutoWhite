@@ -79,6 +79,17 @@ check("мёртвая зона: мелкую разницу догоняем с�
       aw._approach((0.3749, 0.3749), (0.3750, 0.3750)), (0.3750, 0.3750))
 check("шаг не перескакивает цель", aw._approach((0.3740, 0.3740), (0.3760, 0.3760))[0] <= 0.3760, True)
 
+print("датчики и освещённость:")
+check("один датчик", aw._combine_lux([10.0]), 10.0)
+check("двойной ALS: близкие показания усредняются", aw._combine_lux([10.0, 12.0]), 11.0)
+check("разные шкалы: берём первый", aw._combine_lux([10.0, 1000.0]), 10.0)
+check("пустой список", aw._combine_lux([]), None)
+check("нули не ломают среднее", aw._combine_lux([0.0, 0.0]), 0.0)
+check("обработанный канал приоритетнее raw",
+      aw.LUX_CHANNELS[0] == "in_illuminance_input"
+      and aw.LUX_CHANNELS[1] == "in_illuminance_raw", True)
+check("драйвер Steam Deck в списке", "ltrf216a" in aw.ALS_NAMES, True)
+
 print("версии и обновления:")
 check("текущая версия из манифеста", aw._current_version(), "1.0.0")
 check("1.0.0 новее 0.9.9", aw._version_key("1.0.0") > aw._version_key("0.9.9"), True)
