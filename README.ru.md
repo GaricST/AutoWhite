@@ -1,11 +1,18 @@
+![AutoWhite](img/banner.png)
+
 # AutoWhite
+
+[![Версия](https://img.shields.io/badge/версия-1.0.0-blue.svg)](https://github.com/GaricST/AutoWhite/releases)
+[![Лицензия](https://img.shields.io/badge/лицензия-MIT-green.svg)](LICENSE)
+[![Платформа](https://img.shields.io/badge/платформа-SteamOS%20%7C%20gamescope-informational.svg)](#требования)
+[![Decky Loader](https://img.shields.io/badge/Decky-Loader-9147ff.svg)](https://github.com/SteamDeckHomebrew/decky-loader)
+
+[English](README.md) · **Русский**
 
 Плагин для [Decky Loader](https://github.com/SteamDeckHomebrew/decky-loader), который
 подстраивает **точку белого экрана под освещение в комнате**: в темноте картинка теплее,
 при ярком свете — нейтральнее. Яркость при этом не меняется — только цветовая температура
 белого.
-
-**English version:** [README.md](README.md)
 
 ## Что делает
 
@@ -60,12 +67,23 @@ gamescope — атомом `GAMESCOPE_DISPLAY_VIRTUAL_WHITE` (координат
 
 ## Установка
 
+### Одной командой (рабочий стол SteamOS → Konsole)
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/GaricST/AutoWhite/main/install.sh | sh
+```
+
+Скрипт скачает текущую версию, положит её в `~/homebrew/plugins/AutoWhite` и перезапустит
+Decky. Для обновления — та же команда.
+
+### Через Decky
+
 1. Установите [Decky Loader](https://github.com/SteamDeckHomebrew/decky-loader).
 2. Скачайте `AutoWhite-<версия>.zip` из Releases.
 3. Decky → **Настройки** → **Общие** → **Установить плагин из файла** → выберите ZIP.
 4. Откройте **AutoWhite** в боковой панели Decky.
 
-Из папки с исходниками — одной командой на консоли:
+### Из папки с исходниками
 
 ```bash
 ./install.sh
@@ -94,6 +112,7 @@ main.py              backend: чтение датчика, расчёт точк
 dist/index.js        собранный frontend панели, коммитится как есть — шаг сборки не нужен
 tests/test_logic.py  тесты: расчёт точки белого, сглаживание, санитизация настроек
 assets/icon.svg      иконка плагина
+img/banner.png       картинка-шапка для этого README
 install.sh           установка / обновление из этой папки на консоли
 logs/                примеры логов с устройства разработки
 ```

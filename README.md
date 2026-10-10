@@ -1,10 +1,17 @@
+![AutoWhite](img/banner.png)
+
 # AutoWhite
+
+[![Version](https://img.shields.io/badge/version-1.0.0-blue.svg)](https://github.com/GaricST/AutoWhite/releases)
+[![License](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
+[![Platform](https://img.shields.io/badge/platform-SteamOS%20%7C%20gamescope-informational.svg)](#requirements)
+[![Decky Loader](https://img.shields.io/badge/Decky-Loader-9147ff.svg)](https://github.com/SteamDeckHomebrew/decky-loader)
+
+**English** · [Русский](README.ru.md)
 
 A [Decky Loader](https://github.com/SteamDeckHomebrew/decky-loader) plugin that keeps the
 **display white point in step with the ambient light**: warmer when the room is dark,
 neutral in bright light. Brightness is never touched — only the colour temperature of white.
-
-**Русская версия:** [README.ru.md](README.ru.md)
 
 ## What it does
 
@@ -59,12 +66,23 @@ Dark-end mapping: `warm = NEUTRAL + (max_warm − NEUTRAL) × warmth`, `NEUTRAL 
 
 ## Installation
 
+### One command (SteamOS Desktop → Konsole)
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/GaricST/AutoWhite/main/install.sh | sh
+```
+
+The script downloads the current version, copies it into `~/homebrew/plugins/AutoWhite`
+and restarts Decky. Re-run the same command to update.
+
+### Through Decky
+
 1. Install [Decky Loader](https://github.com/SteamDeckHomebrew/decky-loader).
 2. Download `AutoWhite-<version>.zip` from Releases.
 3. Decky → **Settings** → **General** → **Install plugin from file** → pick the ZIP.
 4. Open **AutoWhite** in the Decky sidebar.
 
-From a checkout, one command on the device:
+### From a checkout
 
 ```bash
 ./install.sh
@@ -93,6 +111,7 @@ main.py              backend: sensor read, white-point maths, gamescope write, p
 dist/index.js        frontend bundle (Decky panel UI), committed as-is — no build step
 tests/test_logic.py  unit tests: white-point maths, smoothing, settings sanitisation
 assets/icon.svg      plugin icon
+img/banner.png       header image for this README
 install.sh           install / update from this folder on the device
 logs/                sample logs from the development device
 ```
