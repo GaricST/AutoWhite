@@ -117,6 +117,8 @@ check("обязательные ключи на месте", sorted(aw.DEFAULTS)
       sorted(["enabled", "warmth", "lux_dark", "lux_bright", "max_warm", "device"]))
 name, profile = aw._device_profile()
 check("профиль устройства не ломается", isinstance(name, str) and isinstance(profile, dict), True)
+check("профиль Steam Deck на максимуме теплоты",
+      aw.DEVICE_PROFILES[0][1]["max_warm"], 0.420)
 check("профиль Steam Deck теплее Legion",
       aw.DEVICE_PROFILES[0][1]["max_warm"] > aw.DEVICE_PROFILES[1][1]["max_warm"], True)
 check("пороги Steam Deck выше (датчик чувствительнее)",

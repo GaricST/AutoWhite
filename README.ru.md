@@ -138,7 +138,7 @@ Decky. Для обновления — та же команда.
 
 | Устройство | Теплота в темноте | Пороги |
 |---|---|---|
-| Steam Deck (Jupiter LCD / Galileo OLED) | 0.400 | 30 … 900 лк |
+| Steam Deck (Jupiter LCD / Galileo OLED) | 0.420 | 30 … 900 лк |
 | Legion Go / Legion Go 2 (83E1 / 83N0) | 0.375 | 15 … 250 лк |
 
 Профиль применяется один раз для устройства (запоминается как `device` в `settings.json`)

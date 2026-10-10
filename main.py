@@ -52,7 +52,7 @@ DMI_FILES = (
 # пороги выше и максимум теплоты шире — иначе экран кажется недостаточно тёплым.
 DEVICE_PROFILES = (
     (("jupiter", "galileo", "steam deck"),
-     {"max_warm": 0.400, "lux_dark": 30, "lux_bright": 900}),
+     {"max_warm": 0.420, "lux_dark": 30, "lux_bright": 900}),
     (("83e1", "83n0", "83n1", "legion go"),
      {"max_warm": 0.375, "lux_dark": 15, "lux_bright": 250}),
 )

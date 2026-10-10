@@ -136,7 +136,7 @@ looks different on different panels and the light sensors report different scale
 
 | Device | Warm end | Thresholds |
 |---|---|---|
-| Steam Deck (Jupiter LCD / Galileo OLED) | 0.400 | 30 … 900 lx |
+| Steam Deck (Jupiter LCD / Galileo OLED) | 0.420 | 30 … 900 lx |
 | Legion Go / Legion Go 2 (83E1 / 83N0) | 0.375 | 15 … 250 lx |
 
 The profile is applied once per device (recorded as `device` in `settings.json`) and never
