@@ -1,0 +1,18 @@
+{
+  "name": "AutoWhite",
+  "author": "Igor",
+  "flags": [
+    "root"
+  ],
+  "api_version": 2,
+  "main": "main.py",
+  "bin": "dist/index.js",
+  "version": "1.0.0",
+  "publish": {
+    "tags": [
+      "utilities",
+      "hardware"
+    ],
+    "description": "Точка белого экрана подстраивается под освещение в комнате (датчик яркости) или по расписанию."
+  }
+}

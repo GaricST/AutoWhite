@@ -1,0 +1,6 @@
+[2026-10-10 18:02:42,125][INFO]: autowhite: старт (источник sensor, теплота 0.7, включено)
+[2026-10-10 18:03:23,732][INFO]: Calling Loader unload function for AutoWhite (v1.0.0).
+[2026-10-10 18:03:23,733][INFO]: Attempting to unload with plugin AutoWhite (v1.0.0)'s "_unload" function.
+
+[2026-10-10 18:03:23,733][INFO]: Unloaded AutoWhite (v1.0.0)
+
