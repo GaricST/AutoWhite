@@ -42,6 +42,31 @@ const S = {
 };
 const t = (key) => { const v = S[key]; return Array.isArray(v) ? v[LANG === "ru" ? 0 : 1] : key; };
 
+// Иконка панели: половина диска залита — «свет и тень», как на шапке.
+const WhiteIcon = () => SP_JSX.jsx("svg", {
+    width: "1em",
+    height: "1em",
+    viewBox: "0 0 24 24",
+    fill: "none",
+    xmlns: "http://www.w3.org/2000/svg",
+    children: [
+        SP_JSX.jsx("g", {
+            stroke: "currentColor",
+            strokeWidth: 1.8,
+            strokeLinecap: "round",
+            children: [
+                SP_JSX.jsx("circle", { cx: 12, cy: 12, r: 5.5 }, "disc"),
+                SP_JSX.jsx("path", {
+                    d: "M12 2v1.5M12 20.5V22M2 12h1.5M20.5 12H22"
+                        + "M4.93 4.93l1.06 1.06M18.01 18.01l1.06 1.06"
+                        + "M19.07 4.93l-1.06 1.06M5.99 18.01l-1.06 1.06"
+                }, "rays")
+            ]
+        }, "ring"),
+        SP_JSX.jsx("path", { d: "M12 6.5a5.5 5.5 0 0 0 0 11Z", fill: "currentColor" }, "half")
+    ]
+});
+
 const row = (child, key) => SP_JSX.jsx(DFL.PanelSectionRow, { children: child }, key);
 const section = (title, children, key) => SP_JSX.jsx(DFL.PanelSection, { title: title, children: children }, key);
 
@@ -151,7 +176,7 @@ var index = definePlugin(() => ({
     name: "AutoWhite",
     titleView: SP_JSX.jsx("div", { className: DFL.staticClasses.Title, children: "AutoWhite" }),
     content: SP_JSX.jsx(Content, {}),
-    icon: SP_JSX.jsx("span", { children: "◐" }),
+    icon: SP_JSX.jsx(WhiteIcon, {}),
     onDismount() { }
 }));
 
