@@ -34,7 +34,8 @@ white point atom `GAMESCOPE_DISPLAY_VIRTUAL_WHITE` (CIE 1931 x/y):
   schedule, no manual switching
 - **Warm in the dark, neutral in bright light** — the point moves with a critically damped
   second-order filter (the same approach as auto-brightness in LegionToolkit): the transition
-  takes `smooth_s` seconds (5 by default), speed is limited, there is a dead band and an
+  takes `smooth_s` seconds (1.2 by default — change it in `settings.json` if you want it
+  slower or faster), speed is limited, there is a dead band and an
   input filter on the sensor, and the step is computed from real time — so flipping a light
   switch produces a smooth glide, not a jump
 - **Applies immediately at boot** — Decky loads the plugin at startup and the white point

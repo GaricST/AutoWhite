@@ -90,7 +90,7 @@ DEFAULTS = {
     "lux_bright": 400.0,    # светлее — нейтральная
     "max_warm_k": 3200,     # температура самого тёплого конца, К
     "tint": 0.0,            # оттенок: <0 зеленее, >0 краснее (перпендикулярно локусу)
-    "smooth_s": 5.0,        # время перехода точки белого, с
+    "smooth_s": 1.2,        # время перехода точки белого, с (быстрее — меньше)
     "device": "",           # модель, под которую подставлен профиль
     "profile_version": 0,   # версия профиля: при обновлении применяем заново
 }
@@ -446,7 +446,7 @@ class _SmoothWhite:
     частоте опроса и не зависит от загрузки консоли.
     """
 
-    def __init__(self, transition_s=5.0, max_rate=0.08, deadband=DEADBAND):
+    def __init__(self, transition_s=1.2, max_rate=0.3, deadband=DEADBAND):
         self.transition_s = max(0.5, float(transition_s))
         self.max_rate = max(0.005, float(max_rate))
         self.deadband = max(0.0, float(deadband))
@@ -483,6 +483,13 @@ class _SmoothWhite:
 
     def advance(self, dt):
         if self.point is None or self.target is None:
+            return self.point
+        # Осталась мелочь в пределах мёртвой зоны — сразу к цели, чтобы не
+        # «доползать» до неё секундами.
+        if (abs(self.point[0] - self.target[0]) <= self.deadband
+                and abs(self.point[1] - self.target[1]) <= self.deadband):
+            self.point = tuple(self.target)
+            self.velocity = (0.0, 0.0)
             return self.point
         dt = min(max(dt, 0.0), 0.1)
         if dt <= 0:
@@ -644,7 +651,7 @@ class Plugin:
         number("lux_dark", 15.0, 0.0, 100000.0)
         number("lux_bright", 400.0, 1.0, 100000.0)
         number("max_warm_k", 3200.0, 1500.0, 6500.0)
-        number("smooth_s", 5.0, 0.5, 30.0)
+        number("smooth_s", 1.2, 0.3, 30.0)
         number("tint", 0.0, -1.0, 1.0)
         if self.settings["lux_bright"] <= self.settings["lux_dark"]:
             self.settings["lux_bright"] = self.settings["lux_dark"] + 1.0
