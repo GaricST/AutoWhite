@@ -41,10 +41,11 @@ white point atom `GAMESCOPE_DISPLAY_VIRTUAL_WHITE` (CIE 1931 x/y):
 - **Cooler — Warmer slider** — how warm the dark end becomes (0…100 %)
 - **Live status** — current illuminance and the current white point
 - **Restores itself if the point is changed** — the atom is read back every 5 s, so a reset
-  by gamescope after a reboot (or by Steam's night mode) is corrected automatically
+  by gamescope after a reboot is corrected automatically
 - **Update check** — a button in the panel asks GitHub for the latest release
 - **English / Russian UI**, chosen automatically from the system language
-- **Self-contained** — no daemons, no network, no dependency on other plugins
+- **Self-contained** — no daemons, no background network requests, no dependency on other
+  plugins (the update check runs only when you press the button)
 
 ## How it works
 
@@ -61,8 +62,12 @@ Decky plugins run as **root**, while the gamescope X server belongs to user `dec
 `xprop` from root fails with `Authorization required`. That is why the atom is written
 through `runuser -u deck`.
 
-Dark-end mapping: `warm = NEUTRAL + (max_warm − NEUTRAL) × warmth`, `NEUTRAL = (0.3128, 0.3292)`,
-`max_warm = 0.375`, and `t = clamp((lux − 15) / (250 − 15))` blends warm → neutral.
+Mapping: the warm end is set as a colour **temperature** (`max_warm_k`) and its xy is taken
+from the black-body locus with interpolation in mired, so intermediate points stay on a
+neutral tint instead of drifting green — interpolating along the `x = y` diagonal does not
+follow any real illuminant. The **Cooler — Warmer** slider scales that warm end, and
+illuminance is mapped on a **logarithmic** scale (`t = log(lux/dark) / log(bright/dark)`),
+which matches how the eye perceives light.
 
 ## Panel
 
@@ -136,8 +141,8 @@ looks different on different panels and the light sensors report different scale
 
 | Device | Warm end | Thresholds |
 |---|---|---|
-| Steam Deck (Jupiter LCD / Galileo OLED) | 0.420 | 30 … 900 lx |
-| Legion Go / Legion Go 2 (83E1 / 83N0) | 0.375 | 15 … 250 lx |
+| Steam Deck (Jupiter LCD / Galileo OLED) | 2700 K | 30 … 900 lx |
+| Legion Go / Legion Go 2 (83E1 / 83N0) | 3900 K | 15 … 400 lx |
 
 The profile is applied once per device (recorded as `device` in `settings.json`) and never
 overrides your own values afterwards.

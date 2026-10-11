@@ -19,10 +19,24 @@
   / Russian and English UI, picked from the system language.
 - Самодостаточность: нужны только Decky Loader, `xprop`, `runuser`, gamescope и ALS.
   / Self-contained: Decky Loader, `xprop`, `runuser`, gamescope, ALS.
-- Профиль устройства по DMI: Steam Deck получает более тёплую кривую (0.400, пороги
-  30–900 лк), Legion Go — базовую (0.375, 15–250 лк).
-  / Per-device profile from DMI: Steam Deck gets a warmer curve (0.400, 30–900 lx),
-  Legion Go keeps the base one (0.375, 15–250 lx).
+- Профиль устройства по DMI: Steam Deck — тёплый конец 2700 К и пороги 30–900 лк,
+  Legion Go — 3900 К и 15–400 лк.
+  / Per-device profile from DMI: Steam Deck — 2700 K warm end, 30–900 lx;
+  Legion Go — 3900 K, 15–400 lx.
+- Точка белого считается по локусу чёрного тела с интерполяцией по mired (раньше — по
+  диагонали x = y, что давало зеленоватый оттенок); освещённость переводится в положение
+  на кривой по логарифмической шкале.
+  / The white point now follows the black-body locus with mired interpolation (the x = y
+  diagonal drifted green), and illuminance is mapped logarithmically.
+- Сырые каналы датчиков больше не выдаются за люксы: используются обработанный канал,
+  scale/offset драйвера или честное «датчик не откалиброван».
+  / Raw sensor channels are no longer treated as lux: processed channel, driver scale/offset,
+  or an explicit "sensor not calibrated".
+- Пауза после ошибок записи (5/15/60 с), возврат нейтральной точки при выключении плагина
+  и при выгрузке, атомарное сохранение настроек, диагностика в панели (статус, датчик,
+  текущая и целевая точка).
+  / Backoff after write errors (5/15/60 s), neutral point restored on disable and unload,
+  atomic settings writes, panel diagnostics (status, sensor, current and target point).
 - Самовосстановление: точка белого сверяется каждые 5 с, поэтому сброс после перезагрузки
   консоли или чужое вмешательство исправляются автоматически.
   / Self-healing: the white point is verified every 5 s, so a reset after a reboot or an
