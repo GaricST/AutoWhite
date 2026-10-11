@@ -201,8 +201,10 @@ check("канал интенсивности работает и без scale (�
 print("профили устройств:")
 check("Steam Deck теплее Legion",
       aw.DEVICE_PROFILES[0][1]["max_warm_k"] < aw.DEVICE_PROFILES[1][1]["max_warm_k"], True)
-check("пороги Steam Deck выше",
-      aw.DEVICE_PROFILES[0][1]["lux_bright"] > aw.DEVICE_PROFILES[1][1]["lux_bright"], True)
+check("порог темноты Steam Deck ниже (шкала датчика меньше)",
+      aw.DEVICE_PROFILES[0][1]["lux_dark"] < aw.DEVICE_PROFILES[1][1]["lux_dark"], True)
+check("профили различаются порогами",
+      aw.DEVICE_PROFILES[0][1]["lux_dark"] != aw.DEVICE_PROFILES[1][1]["lux_dark"], True)
 name, profile = aw._device_profile()
 check("профиль не ломается", isinstance(name, str) and isinstance(profile, dict), True)
 

@@ -76,7 +76,7 @@ DMI_FILES = (
 # Профиль применяется один раз и запоминается в настройках ключом device.
 DEVICE_PROFILES = (
     (("jupiter", "galileo", "steam deck"),
-     {"max_warm_k": 2300, "lux_dark": 30, "lux_bright": 900}),
+     {"max_warm_k": 2300, "lux_dark": 2, "lux_bright": 400}),
     (("83e1", "83n0", "83n1", "legion go"),
      {"max_warm_k": 3200, "lux_dark": 15, "lux_bright": 400}),
 )
@@ -92,7 +92,7 @@ DEFAULTS = {
     "profile_version": 0,   # версия профиля: при обновлении применяем заново
 }
 
-PROFILE_VERSION = 3          # поднять, если меняются значения профилей
+PROFILE_VERSION = 4          # поднять, если меняются значения профилей
 
 _last_state = {"lux": None, "white": None, "applied": False, "error": "",
                "sensor": None, "target": None, "supported": None}
@@ -654,7 +654,9 @@ class Plugin:
                     read_dt = (now - last_read) if last_read else SENSOR_INTERVAL
                     lux = await loop.run_in_executor(None, _read_als_lux)
                     smooth_lux = self.smooth.smooth_lux(lux, read_dt)
-                    _last_state["lux"] = round(smooth_lux) if smooth_lux is not None else None
+                    # Дробные значения важны: у ltrf216a в комнате это доли люкса,
+                    # и округление до целых показывало «0 лк» при живом датчике.
+                    _last_state["lux"] = round(smooth_lux, 2) if smooth_lux is not None else None
                     want = _target_white(settings, smooth_lux)
                     if want is not None:
                         self.smooth.set_target(want, settings.get("smooth_s"))
@@ -721,7 +723,7 @@ class Plugin:
         loop = asyncio.get_running_loop()
         if self.settings.get("enabled", True):
             lux = await loop.run_in_executor(None, _read_als_lux)
-            _last_state["lux"] = round(lux) if lux is not None else None
+            _last_state["lux"] = round(lux, 2) if lux is not None else None
             want = _target_white(self.settings, lux)
             _last_state["target"] = list(want) if want else None
             if want is not None:

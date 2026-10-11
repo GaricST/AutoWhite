@@ -153,8 +153,12 @@ const Content = () => {
     const targetText = st.target
         ? st.target[0].toFixed(4) + " / " + st.target[1].toFixed(4)
         : "—";
-    const luxText = (st.lux === null || st.lux === undefined)
-        ? t("noSensor") : st.lux + t("luxUnit");
+    const luxValue = st.lux;
+    const luxText = (luxValue === null || luxValue === undefined)
+        ? t("noSensor")
+        : (typeof luxValue === "number"
+            ? (luxValue < 1 ? luxValue.toFixed(2) : (luxValue < 10 ? luxValue.toFixed(1) : Math.round(luxValue)))
+            : luxValue) + t("luxUnit");
 
 
     const controls = [
