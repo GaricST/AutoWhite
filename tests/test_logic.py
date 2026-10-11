@@ -61,7 +61,8 @@ print("локус и температуры:")
 check("6500 К = D65", aw._xy_for_cct(6500), aw.NEUTRAL)
 check("чем теплее, тем больше x", aw._xy_for_cct(2700)[0] > aw._xy_for_cct(3900)[0], True)
 check("чем теплее, тем больше y", aw._xy_for_cct(2700)[1] > aw._xy_for_cct(3900)[1], True)
-check("ниже таблицы — крайняя точка", aw._xy_for_cct(1000), aw._xy_for_cct(2400))
+check("ниже таблицы — крайняя точка", aw._xy_for_cct(1000),
+      (aw.CCT_TABLE[0][1], aw.CCT_TABLE[0][2]))
 check("выше таблицы — D65", aw._xy_for_cct(20000), aw.NEUTRAL)
 check("kelvin: warmth=0 -> 6500 К", round(aw._kelvin_mix(2700, 0.0, 0.0)), 6500)
 check("kelvin: warmth=1, t=0 -> тёплый конец", round(aw._kelvin_mix(2700, 1.0, 0.0)), 2700)
@@ -151,6 +152,40 @@ open(tmp, "w").write("inf")
 check("inf -> None", aw._read_number(tmp), None)
 os.remove(tmp)
 
+print("чтение датчиков (sysfs):")
+devdir = "/tmp/aw-device"
+os.makedirs(devdir, exist_ok=True)
+
+
+def sysfs(name, value):
+    with open(os.path.join(devdir, name), "w") as handle:
+        handle.write(str(value))
+
+
+sysfs("name", "ltrf216a")
+sysfs("in_illuminance_input", "120")
+sysfs("in_illuminance_raw", "5000")
+sysfs("in_illuminance_scale", "0.001")
+check("обработанный канал приоритетен", aw._lux_from_device(devdir),
+      (120.0, "in_illuminance_input"))
+sysfs("in_illuminance_input", "0")
+sysfs("in_illuminance_scale", "0.01")
+value, source = aw._lux_from_device(devdir)
+check("нулевой processed при живом raw -> raw*scale (как на Steam Deck)",
+      round(value, 3), 50.0)
+os.remove(os.path.join(devdir, "in_illuminance_input"))
+value, source = aw._lux_from_device(devdir)
+check("без обработанного канала -> raw*scale", round(value, 3), 50.0)
+sysfs("in_illuminance_input", "0")
+sysfs("in_illuminance_raw", "0")
+check("полная темнота -> 0 люкс", aw._lux_from_device(devdir),
+      (0.0, "in_illuminance_input"))
+sysfs("in_illuminance_input", "0")
+sysfs("in_illuminance_raw", "300")
+sysfs("in_illuminance_scale", "0.02")
+value, _ = aw._lux_from_device(devdir)
+check("сырой канал пересчитывается через scale", round(value, 2), 6.0)
+
 print("профили устройств:")
 check("Steam Deck теплее Legion",
       aw.DEVICE_PROFILES[0][1]["max_warm_k"] < aw.DEVICE_PROFILES[1][1]["max_warm_k"], True)
@@ -158,6 +193,20 @@ check("пороги Steam Deck выше",
       aw.DEVICE_PROFILES[0][1]["lux_bright"] > aw.DEVICE_PROFILES[1][1]["lux_bright"], True)
 name, profile = aw._device_profile()
 check("профиль не ломается", isinstance(name, str) and isinstance(profile, dict), True)
+
+original_profile = aw._device_profile
+aw._device_profile = lambda: ("jupiter", {"max_warm_k": 2700, "lux_dark": 30, "lux_bright": 900})
+pdev = aw.Plugin()
+pdev.settings.update({"device": "jupiter", "profile_version": 0, "max_warm_k": 3900})
+pdev._apply_device_profile()
+check("профиль применяется заново при новой версии", pdev.settings["max_warm_k"], 2700)
+check("версия профиля записана", pdev.settings["profile_version"], aw.PROFILE_VERSION)
+pdev2 = aw.Plugin()
+pdev2.settings.update({"device": "jupiter", "profile_version": aw.PROFILE_VERSION,
+                       "max_warm_k": 3900})
+pdev2._apply_device_profile()
+check("актуальный профиль не перезаписывает настройки", pdev2.settings["max_warm_k"], 3900)
+aw._device_profile = original_profile
 
 print("санитизация:")
 p = aw.Plugin()
@@ -183,7 +232,8 @@ p4.settings.update({"enabled": "true"})
 p4._sanitize()
 check('строка "true" -> включено', p4.settings["enabled"], True)
 check("обязательные ключи на месте", sorted(aw.DEFAULTS),
-      sorted(["enabled", "warmth", "lux_dark", "lux_bright", "max_warm_k", "smooth_s", "device"]))
+      sorted(["enabled", "warmth", "lux_dark", "lux_bright", "max_warm_k", "smooth_s",
+              "device", "profile_version"]))
 
 print("версии и обновления:")
 check("текущая версия из манифеста", aw._current_version(), "1.0.0")

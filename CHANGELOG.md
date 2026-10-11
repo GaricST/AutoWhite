@@ -23,10 +23,10 @@
   / Russian and English UI, picked from the system language.
 - Самодостаточность: нужны только Decky Loader, `xprop`, `runuser`, gamescope и ALS.
   / Self-contained: Decky Loader, `xprop`, `runuser`, gamescope, ALS.
-- Профиль устройства по DMI: Steam Deck — тёплый конец 2700 К и пороги 30–900 лк,
-  Legion Go — 3900 К и 15–400 лк.
-  / Per-device profile from DMI: Steam Deck — 2700 K warm end, 30–900 lx;
-  Legion Go — 3900 K, 15–400 lx.
+- Профиль устройства по DMI: Steam Deck — тёплый конец 2300 К и пороги 30–900 лк,
+  Legion Go — 3200 К и 15–400 лк (настраивается через `max_warm_k`).
+  / Per-device profile from DMI: Steam Deck — 2300 K warm end, 30–900 lx;
+  Legion Go — 3200 K, 15–400 lx (adjustable via `max_warm_k`).
 - Точка белого считается по локусу чёрного тела с интерполяцией по mired (раньше — по
   диагонали x = y, что давало зеленоватый оттенок); освещённость переводится в положение
   на кривой по логарифмической шкале.

@@ -51,6 +51,8 @@ RELEASES_PAGE = "https://github.com/GaricST/AutoWhite/releases"
 # поэтому кривая идёт вдоль локуса, а не по диагонали x = y (диагональ даёт
 # зеленоватый оттенок на промежуточных точках).
 CCT_TABLE = (
+    (1900, 0.5267, 0.4133),
+    (2200, 0.5015, 0.4155),
     (2400, 0.4813, 0.4137),
     (2700, 0.4598, 0.4105),
     (3000, 0.4369, 0.4041),
@@ -74,9 +76,9 @@ DMI_FILES = (
 # Профиль применяется один раз и запоминается в настройках ключом device.
 DEVICE_PROFILES = (
     (("jupiter", "galileo", "steam deck"),
-     {"max_warm_k": 2700, "lux_dark": 30, "lux_bright": 900}),
+     {"max_warm_k": 2300, "lux_dark": 30, "lux_bright": 900}),
     (("83e1", "83n0", "83n1", "legion go"),
-     {"max_warm_k": 3900, "lux_dark": 15, "lux_bright": 400}),
+     {"max_warm_k": 3200, "lux_dark": 15, "lux_bright": 400}),
 )
 
 DEFAULTS = {
@@ -84,10 +86,13 @@ DEFAULTS = {
     "warmth": 1.0,          # насколько теплее в темноте (0..1)
     "lux_dark": 15.0,       # темнее — самая тёплая точка
     "lux_bright": 400.0,    # светлее — нейтральная
-    "max_warm_k": 3900,     # температура самого тёплого конца, К
+    "max_warm_k": 3200,     # температура самого тёплого конца, К
     "smooth_s": 5.0,        # время перехода точки белого, с
     "device": "",           # модель, под которую подставлен профиль
+    "profile_version": 0,   # версия профиля: при обновлении применяем заново
 }
+
+PROFILE_VERSION = 3          # поднять, если меняются значения профилей
 
 _last_state = {"lux": None, "white": None, "applied": False, "error": "",
                "sensor": None, "target": None, "supported": None}
@@ -127,13 +132,30 @@ def _scaled_lux(directory, channel, raw):
     return value if math.isfinite(value) else None
 
 
+_logged_devices = set()
+
+
+def _log_channels(directory, processed, raw, scale):
+    """Один раз на устройство пишем сырые значения каналов — для диагностики."""
+    if directory in _logged_devices:
+        return
+    _logged_devices.add(directory)
+    decky.logger.info(
+        f"autowhite: {os.path.basename(directory)} каналы — "
+        f"input={processed}, raw={raw}, scale={scale}")
+
+
 def _lux_from_device(directory):
     """(люксы, подпись канала) для одного IIO-устройства или (None, причина)."""
     processed = _read_number(os.path.join(directory, "in_illuminance_input"))
-    if processed is not None:
-        # Ноль — валидное показание темноты, а не повод менять канал.
-        return max(0.0, processed), "in_illuminance_input"
     raw = _read_number(os.path.join(directory, "in_illuminance_raw"))
+    scale = _read_number(os.path.join(directory, "in_illuminance_scale"))
+    if processed is not None or raw is not None:
+        _log_channels(directory, processed, raw, scale)
+    # Обработанный канал приоритетен, но если он всегда ноль, а сырой живой
+    # (так бывает у ltrf216a на Steam Deck) — считаем сырой через scale.
+    if processed is not None and not (processed == 0 and raw):
+        return max(0.0, processed), "in_illuminance_input"
     if raw is not None:
         scaled = _scaled_lux(directory, "in_illuminance_raw", raw)
         if scaled is not None:
@@ -322,7 +344,7 @@ def _xy_for_cct(kelvin):
 
 def _kelvin_mix(warm_k, warmth, t):
     """Температура кривой: ползунок задаёт тёплый конец, свет — положение на нём."""
-    warm_k = max(2000.0, min(6500.0, float(warm_k)))
+    warm_k = max(1500.0, min(6500.0, float(warm_k)))
     warmth = max(0.0, min(1.0, float(warmth)))
     dark_mired = 1e6 / warm_k
     neutral_mired = 1e6 / NEUTRAL_K
@@ -520,10 +542,13 @@ class Plugin:
     def _apply_device_profile(self):
         """На новой консоли подставляет её профиль (тёплый конец и пороги)."""
         name, profile = _device_profile()
-        if not profile or self.settings.get("device") == name:
+        fresh = self.settings.get("device") != name
+        outdated = self.settings.get("profile_version") != PROFILE_VERSION
+        if not profile or not (fresh or outdated):
             return
         self.settings.update(profile)
         self.settings["device"] = name
+        self.settings["profile_version"] = PROFILE_VERSION
         self._sanitize()
         _save_settings(self.settings)
         decky.logger.info(
@@ -550,7 +575,7 @@ class Plugin:
         number("warmth", 1.0, 0.0, 1.0)
         number("lux_dark", 15.0, 0.0, 100000.0)
         number("lux_bright", 400.0, 1.0, 100000.0)
-        number("max_warm_k", 3900.0, 2000.0, 6500.0)
+        number("max_warm_k", 3200.0, 1500.0, 6500.0)
         number("smooth_s", 5.0, 0.5, 30.0)
         if self.settings["lux_bright"] <= self.settings["lux_dark"]:
             self.settings["lux_bright"] = self.settings["lux_dark"] + 1.0

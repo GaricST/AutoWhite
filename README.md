@@ -143,8 +143,11 @@ looks different on different panels and the light sensors report different scale
 
 | Device | Warm end | Thresholds |
 |---|---|---|
-| Steam Deck (Jupiter LCD / Galileo OLED) | 2700 K | 30 … 900 lx |
-| Legion Go / Legion Go 2 (83E1 / 83N0) | 3900 K | 15 … 400 lx |
+| Steam Deck (Jupiter LCD / Galileo OLED) | 2300 K | 30 … 900 lx |
+| Legion Go / Legion Go 2 (83E1 / 83N0) | 3200 K | 15 … 400 lx |
+
+The warm end can be changed in `settings.json` (`max_warm_k`, 1500–6500 K) if you want it
+warmer or cooler than the profile default.
 
 The profile is applied once per device (recorded as `device` in `settings.json`) and never
 overrides your own values afterwards.
