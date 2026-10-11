@@ -89,6 +89,7 @@ DEFAULTS = {
     "lux_dark": 15.0,       # темнее — самая тёплая точка
     "lux_bright": 400.0,    # светлее — нейтральная
     "max_warm_k": 3200,     # температура самого тёплого конца, К
+    "tint": 0.0,            # оттенок: <0 зеленее, >0 краснее (перпендикулярно локусу)
     "smooth_s": 5.0,        # время перехода точки белого, с
     "device": "",           # модель, под которую подставлен профиль
     "profile_version": 0,   # версия профиля: при обновлении применяем заново
@@ -376,6 +377,48 @@ def _kelvin_mix(warm_k, warmth, t):
     return 1e6 / (warm_mired + (neutral_mired - warm_mired) * max(0.0, min(1.0, t)))
 
 
+TINT_SCALE = 0.015             # максимальный сдвиг по Duv при tint = ±1
+
+
+def _xy_to_uv(x, y):
+    denominator = -2.0 * x + 12.0 * y + 3.0
+    if abs(denominator) < 1e-9:
+        return 0.1978, 0.4683
+    return 4.0 * x / denominator, 6.0 * y / denominator
+
+
+def _uv_to_xy(u, v):
+    denominator = 2.0 * u - 8.0 * v + 4.0
+    if abs(denominator) < 1e-9:
+        return NEUTRAL
+    return 3.0 * u / denominator, 2.0 * v / denominator
+
+
+def _tint_xy(point, tint, kelvin):
+    """Сдвиг оттенка перпендикулярно локусу: tint > 0 — краснее, < 0 — зеленее.
+
+    Работаем в uv (CIE 1960), где Duv — обычная мера ухода от локуса.
+    """
+    tint = max(-1.0, min(1.0, float(tint)))
+    if abs(tint) < 0.001:
+        return point
+    u0, v0 = _xy_to_uv(point[0], point[1])
+    u1, v1 = _xy_to_uv(*_xy_for_cct(kelvin * 0.98))
+    u2, v2 = _xy_to_uv(*_xy_for_cct(kelvin * 1.02))
+    du, dv = u2 - u1, v2 - v1
+    length = math.hypot(du, dv)
+    if length < 1e-9:
+        return point
+    nu, nv = -dv / length, du / length      # нормаль к локусу
+    if nv < 0:                              # держим «зелёную» нормаль вверх
+        nu, nv = -nu, -nv
+    shift = -tint * TINT_SCALE
+    x, y = _uv_to_xy(u0 + nu * shift, v0 + nv * shift)
+    if not _check_xy((x, y)):
+        return point
+    return round(x, 4), round(y, 4)
+
+
 def _target_white(settings, lux):
     """Куда вести точку белого: (x, y) или None, если данных нет."""
     if lux is None:
@@ -388,7 +431,7 @@ def _target_white(settings, lux):
     # комнате (100–300 лк) экран почти сразу уходит в нейтраль.
     t = math.log(max(lux, dark) / dark) / math.log(bright / dark)
     kelvin = _kelvin_mix(settings.get("max_warm_k", 3900), settings.get("warmth", 1.0), t)
-    return _xy_for_cct(kelvin)
+    return _tint_xy(_xy_for_cct(kelvin), settings.get("tint", 0.0), kelvin)
 
 
 WHITE_MIN, WHITE_MAX = 0.20, 0.55      # рабочая область координат xy
@@ -602,6 +645,7 @@ class Plugin:
         number("lux_bright", 400.0, 1.0, 100000.0)
         number("max_warm_k", 3200.0, 1500.0, 6500.0)
         number("smooth_s", 5.0, 0.5, 30.0)
+        number("tint", 0.0, -1.0, 1.0)
         if self.settings["lux_bright"] <= self.settings["lux_dark"]:
             self.settings["lux_bright"] = self.settings["lux_dark"] + 1.0
         device = self.settings.get("device", "")

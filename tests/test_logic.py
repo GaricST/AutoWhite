@@ -57,6 +57,17 @@ check("середина между тёплой и нейтральной",
 check("warmth = 0 -> всегда D65", aw._target_white(dict(S, warmth=0.0), 0), aw.NEUTRAL)
 check("точка лежит в допустимой области", aw._check_xy(dark_point), True)
 
+print("оттенок (зеленее — краснее):")
+tint_settings = dict(S, tint=0.0)
+tint_base = aw._target_white(tint_settings, 0)
+tint_green = aw._target_white(dict(S, tint=-1.0), 0)
+tint_red = aw._target_white(dict(S, tint=1.0), 0)
+check("без сдвига точка на локусу", tint_base, aw._xy_for_cct(3900))
+check("зеленее поднимает y", tint_green[1] > tint_base[1], True)
+check("краснее опускает y", tint_red[1] < tint_base[1], True)
+check("обе крайние точки допустимы", aw._check_xy(tint_green) and aw._check_xy(tint_red), True)
+check("сдвиг оттенка ограничен", abs(tint_red[1] - tint_base[1]) < 0.08, True)
+
 print("локус и температуры:")
 check("6500 К = D65", aw._xy_for_cct(6500), aw.NEUTRAL)
 check("чем теплее, тем больше x", aw._xy_for_cct(2700)[0] > aw._xy_for_cct(3900)[0], True)
@@ -246,7 +257,7 @@ p4.settings.update({"enabled": "true"})
 p4._sanitize()
 check('строка "true" -> включено', p4.settings["enabled"], True)
 check("обязательные ключи на месте", sorted(aw.DEFAULTS),
-      sorted(["enabled", "warmth", "lux_dark", "lux_bright", "max_warm_k", "smooth_s",
+      sorted(["enabled", "warmth", "tint", "lux_dark", "lux_bright", "max_warm_k", "smooth_s",
               "device", "profile_version"]))
 
 print("версии и обновления:")

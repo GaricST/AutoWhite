@@ -41,6 +41,9 @@ white point atom `GAMESCOPE_DISPLAY_VIRTUAL_WHITE` (CIE 1931 x/y):
   is set before the panel is ever opened
 - **Enable / disable toggle** — switching the plugin off restores the neutral D65 point
 - **Cooler — Warmer slider** — how warm the dark end becomes (0…100 %)
+- **Greener — Redder slider** — shifts the point off the black-body locus (Duv), so you can
+  go for a pink or a green tint when the panel needs it; the middle position keeps the pure
+  locus
 - **Live status** — current illuminance and the current white point
 - **Restores itself if the point is changed** — the atom is read back every 5 s, so a reset
   by gamescope after a reboot is corrected automatically

@@ -27,6 +27,10 @@
   Legion Go — 3200 К и 15–400 лк (настраивается через `max_warm_k`).
   / Per-device profile from DMI: Steam Deck — 2300 K warm end, 30–900 lx;
   Legion Go — 3200 K, 15–400 lx (adjustable via `max_warm_k`).
+- Ползунок «Зеленее — Краснее»: сдвиг оттенка перпендикулярно локусу (Duv, в uv-пространстве
+  CIE 1960) — до ±0.015, среднее положение оставляет точку на локусе.
+  / Greener — Redder slider: tint shift perpendicular to the locus (Duv in CIE 1960 uv),
+  up to ±0.015; the middle position keeps the point on the locus.
 - Точка белого считается по локусу чёрного тела с интерполяцией по mired (раньше — по
   диагонали x = y, что давало зеленоватый оттенок); освещённость переводится в положение
   на кривой по логарифмической шкале.

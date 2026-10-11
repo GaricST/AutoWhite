@@ -25,6 +25,7 @@ const S = {
     enabled: ["Включено", "Enabled"],
     enabledDesc: ["Экран теплее в темноте и нейтральнее при ярком свете", "Warmer in the dark, neutral in bright light"],
     warmth: ["Холоднее — Теплее", "Cooler — Warmer"],
+    tint: ["Зеленее — Краснее", "Greener — Redder"],
     state: ["Состояние", "State"],
     lux: ["Освещённость", "Illuminance"],
     white: ["Точка белого", "White point"],
@@ -175,7 +176,14 @@ const Content = () => {
                 // only write when the value really changed.
                 if (Math.round((settings.warmth || 0) * 100) !== v) patch({ warmth: v / 100 });
             }
-        }), "warm")
+        }), "warm"),
+        row(SP_JSX.jsx(DFL.SliderField, {
+            label: t("tint"), value: Math.round((settings.tint || 0) * 100),
+            min: -100, max: 100, step: 10, showValue: true,
+            onChange: (v) => {
+                if (Math.round((settings.tint || 0) * 100) !== v) patch({ tint: v / 100 });
+            }
+        }), "tint")
     ];
 
     return SP_JSX.jsx(SP_REACT.Fragment, {
