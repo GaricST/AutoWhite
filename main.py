@@ -75,8 +75,10 @@ DMI_FILES = (
 # Профили устройств: тёплый конец кривой в кельвинах и пороги освещённости.
 # Профиль применяется один раз и запоминается в настройках ключом device.
 DEVICE_PROFILES = (
+    # У ltrf216a на Steam Deck шкала крошечная: в комнате 0.15 лк, фонарик вплотную
+    # даёт 0.45 лк. Пороги подогнаны под этот диапазон, иначе кривая стоит в углу.
     (("jupiter", "galileo", "steam deck"),
-     {"max_warm_k": 2300, "lux_dark": 2, "lux_bright": 400}),
+     {"max_warm_k": 2300, "lux_dark": 0.2, "lux_bright": 5}),
     (("83e1", "83n0", "83n1", "legion go"),
      {"max_warm_k": 3200, "lux_dark": 15, "lux_bright": 400}),
 )
@@ -92,7 +94,7 @@ DEFAULTS = {
     "profile_version": 0,   # версия профиля: при обновлении применяем заново
 }
 
-PROFILE_VERSION = 4          # поднять, если меняются значения профилей
+PROFILE_VERSION = 5          # поднять, если меняются значения профилей
 
 _last_state = {"lux": None, "white": None, "applied": False, "error": "",
                "sensor": None, "target": None, "supported": None}
@@ -378,11 +380,13 @@ def _target_white(settings, lux):
     """Куда вести точку белого: (x, y) или None, если данных нет."""
     if lux is None:
         return None
-    dark = max(1.0, float(settings.get("lux_dark", 15.0)))
-    bright = max(dark + 1.0, float(settings.get("lux_bright", 400.0)))
+    # Нижняя граница 0.001 — чтобы работать и с крошечной шкалой ltrf216a
+    # (на Steam Deck в комнате 0.15 лк), и с обычными люксами Legion.
+    dark = max(0.001, float(settings.get("lux_dark", 15.0)))
+    bright = max(dark * 1.5, float(settings.get("lux_bright", 400.0)))
     # Логарифмическая шкала: восприятие света ближе к логарифму, иначе в обычной
     # комнате (100–300 лк) экран почти сразу уходит в нейтраль.
-    t = math.log(max(lux, 1.0) / dark) / math.log(bright / dark)
+    t = math.log(max(lux, dark) / dark) / math.log(bright / dark)
     kelvin = _kelvin_mix(settings.get("max_warm_k", 3900), settings.get("warmth", 1.0), t)
     return _xy_for_cct(kelvin)
 
