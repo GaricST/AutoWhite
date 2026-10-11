@@ -76,34 +76,56 @@ const Content = () => {
     const [settings, setLocal] = SP_REACT.useState(null);
     const [updateBusy, setUpdateBusy] = SP_REACT.useState(false);
     const [updateText, setUpdateText] = SP_REACT.useState("");
-    const pending = SP_REACT.useRef(null);
+    const pending = SP_REACT.useRef(null);   // изменения, ещё не отправленные
+    const inFlight = SP_REACT.useRef(0);     // сколько запросов записи в полёте
+    const seq = SP_REACT.useRef(0);          // ревизия: старые ответы не применяем
     const timer = SP_REACT.useRef(null);
 
-    const apply = (resp) => {
-        if (!resp) return;
-        setState(resp.state || {});
-        setLocal(resp.settings || {});
-    };
+    // Пока есть неотправленное изменение или запрос в полёте, опрос не должен
+    // перетирать настройки — иначе ползунок отскакивает назад при перетаскивании.
+    const busy = () => Boolean(pending.current) || inFlight.current > 0;
+
     const refresh = SP_REACT.useCallback(async () => {
-        try { apply(await getState()); } catch (e) { }
+        try {
+            const resp = await getState();
+            if (!resp) return;
+            setState(resp.state || {});
+            if (!busy()) setLocal(resp.settings || {});
+        } catch (e) { }
     }, []);
     SP_REACT.useEffect(() => {
         refresh();
         const id = setInterval(refresh, 3000);
         return () => clearInterval(id);
     }, [refresh]);
+    SP_REACT.useEffect(() => () => {
+        if (timer.current) clearTimeout(timer.current);
+    }, []);
 
     const flush = SP_REACT.useCallback(async () => {
         const patchData = pending.current;
         pending.current = null;
         if (!patchData) return;
-        try { apply(await setSettings(patchData)); } catch (e) { }
+        const mySeq = ++seq.current;
+        inFlight.current += 1;
+        try {
+            const resp = await setSettings(patchData);
+            if (mySeq !== seq.current) return;      // ответ устарел — не трогаем UI
+            setState(resp.state || {});
+            // Настройки с сервера, поверх — то, что пользователь успел накликать
+            // за время запроса (эти изменения ещё не отправлены и важнее).
+            setLocal((prev) => Object.assign({}, prev || {}, resp.settings || {},
+                pending.current || {}));
+        } catch (e) {
+        } finally {
+            inFlight.current -= 1;
+        }
     }, []);
     const patch = SP_REACT.useCallback((partial) => {
         setLocal((prev) => Object.assign({}, prev || {}, partial));
         pending.current = Object.assign({}, pending.current || {}, partial);
         if (timer.current) clearTimeout(timer.current);
-        timer.current = setTimeout(() => { timer.current = null; flush(); }, 400);
+        timer.current = setTimeout(() => { timer.current = null; flush(); }, 300);
     }, [flush]);
 
     const runUpdateCheck = async () => {
