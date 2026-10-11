@@ -135,25 +135,34 @@ def _scaled_lux(directory, channel, raw):
 _logged_devices = set()
 
 
-def _log_channels(directory, processed, raw, scale):
-    """Один раз на устройство пишем сырые значения каналов — для диагностики."""
+def _log_channels(directory):
+    """Один раз на устройство пишем все каналы света — это диагностика для консолей."""
     if directory in _logged_devices:
         return
     _logged_devices.add(directory)
+    name = _read_text(os.path.join(directory, "name")) or "?"
+    parts = []
+    try:
+        entries = sorted(os.listdir(directory))
+    except OSError:
+        entries = []
+    for entry in entries:
+        if "illuminance" in entry or "intensity" in entry:
+            value = _read_text(os.path.join(directory, entry))
+            if value is not None:
+                parts.append(entry + "=" + value)
     decky.logger.info(
-        f"autowhite: {os.path.basename(directory)} каналы — "
-        f"input={processed}, raw={raw}, scale={scale}")
+        "autowhite: %s (%s): %s" % (os.path.basename(directory), name,
+                                    ", ".join(parts) or "каналов света нет"))
 
 
 def _lux_from_device(directory):
     """(люксы, подпись канала) для одного IIO-устройства или (None, причина)."""
+    _log_channels(directory)
     processed = _read_number(os.path.join(directory, "in_illuminance_input"))
     raw = _read_number(os.path.join(directory, "in_illuminance_raw"))
-    scale = _read_number(os.path.join(directory, "in_illuminance_scale"))
-    if processed is not None or raw is not None:
-        _log_channels(directory, processed, raw, scale)
-    # Обработанный канал приоритетен, но если он всегда ноль, а сырой живой
-    # (так бывает у ltrf216a на Steam Deck) — считаем сырой через scale.
+    # Обработанный канал приоритетен, но если он ноль, а сырой живой — берём сырой
+    # (так ведёт себя ltrf216a на Steam Deck: input пустой, raw меняется от света).
     if processed is not None and not (processed == 0 and raw):
         return max(0.0, processed), "in_illuminance_input"
     if raw is not None:
@@ -162,17 +171,17 @@ def _lux_from_device(directory):
             return max(0.0, scaled), "in_illuminance_raw*scale"
         return max(0.0, raw), "in_illuminance_raw"
     name = _read_text(os.path.join(directory, "name")) or ""
-    if name.lower() not in ALS_NAMES:
-        return None, None
+    # Каналы интенсивности без канала освещённости — это тоже датчик света
+    # (у части драйверов, в том числе на консолях). Имя драйвера пишем в подпись.
     for channel in INTENSITY_CHANNELS:
-        raw = _read_number(os.path.join(directory, channel))
-        if raw is None:
+        value = _read_number(os.path.join(directory, channel))
+        if value is None:
             continue
-        scaled = _scaled_lux(directory, channel, raw)
-        if scaled is None:
-            # Без scale это произвольные счётчики АЦП — за люксы их не выдаём.
-            return None, name + "/" + channel + " без scale (не откалиброван)"
-        return max(0.0, scaled), name + "/" + channel + "*scale"
+        scaled = _scaled_lux(directory, channel, value)
+        if scaled is not None:
+            return max(0.0, scaled), name + "/" + channel + "*scale"
+        # В 0.2 такой канал работал как есть; оставляем так же, но помечаем шкалу.
+        return max(0.0, value), name + "/" + channel + " (без scale)"
     return None, None
 
 

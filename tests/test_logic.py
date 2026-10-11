@@ -185,6 +185,15 @@ sysfs("in_illuminance_raw", "300")
 sysfs("in_illuminance_scale", "0.02")
 value, _ = aw._lux_from_device(devdir)
 check("сырой канал пересчитывается через scale", round(value, 2), 6.0)
+for entry in ("in_illuminance_input", "in_illuminance_raw", "in_illuminance_scale"):
+    path = os.path.join(devdir, entry)
+    if os.path.exists(path):
+        os.remove(path)
+sysfs("name", "unknown_light")
+sysfs("in_intensity_both_raw", "321")
+value, source = aw._lux_from_device(devdir)
+check("канал интенсивности работает и без scale (как в 0.2)",
+      (round(value, 1), "in_intensity_both_raw" in source), (321.0, True))
 
 print("профили устройств:")
 check("Steam Deck теплее Legion",
