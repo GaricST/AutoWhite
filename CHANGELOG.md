@@ -10,7 +10,11 @@
   точку белого gamescope — `GAMESCOPE_DISPLAY_VIRTUAL_WHITE` (CIE 1931 x/y).
   / Ambient-light adaptive white point driven through gamescope's virtual white point.
 - Плавное сглаживание перехода: тик 0.2 с, опрос датчика раз в 1 с, мёртвая зона 0.0005 —
-  без рывков и ступенек. / Smooth exponential transitions — no jumps.
+  без рывков и ступенек: критически демпфированный фильтр 2-го порядка (как автояркость
+  в LegionToolkit) — скорость, мёртвая зона, фильтр датчика, шаг по реальному времени,
+  настройка `smooth_s` (5 с по умолчанию).
+  / No jumps: a critically damped second-order filter (same as auto-brightness in
+  LegionToolkit) — velocity, dead band, sensor filter, real-time step, `smooth_s` setting.
 - Применение сразу при старте консоли; при выключении возвращается нейтральная D65.
   / Applied at boot; disabling restores neutral D65.
 - Панель: тумблер, ползунок «Холоднее — Теплее», статус (освещённость и текущая точка).

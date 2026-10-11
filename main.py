@@ -85,6 +85,7 @@ DEFAULTS = {
     "lux_dark": 15.0,       # темнее — самая тёплая точка
     "lux_bright": 400.0,    # светлее — нейтральная
     "max_warm_k": 3900,     # температура самого тёплого конца, К
+    "smooth_s": 5.0,        # время перехода точки белого, с
     "device": "",           # модель, под которую подставлен профиль
 }
 
@@ -343,13 +344,80 @@ def _target_white(settings, lux):
     return _xy_for_cct(kelvin)
 
 
-def _approach(cur, want, smooth=SMOOTH, deadband=DEADBAND):
-    """Один шаг плавного приближения к цели (экспоненциальное сглаживание)."""
-    if abs(want[0] - cur[0]) <= deadband and abs(want[1] - cur[1]) <= deadband:
-        return want
-    nxt = (round(cur[0] + (want[0] - cur[0]) * smooth, 4),
-           round(cur[1] + (want[1] - cur[1]) * smooth, 4))
-    return nxt if nxt != cur else want
+WHITE_MIN, WHITE_MAX = 0.20, 0.55      # рабочая область координат xy
+
+
+class _SmoothWhite:
+    """Плавное движение точки белого — критически демпфированный фильтр 2-го порядка.
+
+    Тот же подход, что в LegionToolkit для автояркости: у точки есть скорость,
+    ограничение максимальной скорости, мёртвая зона цели и фильтр входного
+    сигнала. Шаг считается по реальному dt, поэтому переход одинаков при любой
+    частоте опроса и не зависит от загрузки консоли.
+    """
+
+    def __init__(self, transition_s=5.0, max_rate=0.08, deadband=DEADBAND):
+        self.transition_s = max(0.5, float(transition_s))
+        self.max_rate = max(0.005, float(max_rate))
+        self.deadband = max(0.0, float(deadband))
+        self.point = None
+        self.velocity = (0.0, 0.0)
+        self.target = None
+        self.lux = None
+
+    def prime(self, point):
+        """Мгновенно поставить точку (старт, пересоздание gamescope)."""
+        self.point = tuple(point)
+        self.target = tuple(point)
+        self.velocity = (0.0, 0.0)
+
+    def set_target(self, point, transition_s=None):
+        if transition_s:
+            self.transition_s = max(0.5, min(30.0, float(transition_s)))
+        point = (max(WHITE_MIN, min(WHITE_MAX, point[0])),
+                 max(WHITE_MIN, min(WHITE_MAX, point[1])))
+        if self.target is None or (abs(point[0] - self.target[0]) > self.deadband
+                                   or abs(point[1] - self.target[1]) > self.deadband):
+            self.target = point
+
+    def smooth_lux(self, lux, dt, tau=1.5):
+        """Сглаживание показаний датчика: свет в комнате не должен дёргать экран."""
+        if lux is None:
+            return self.lux
+        if self.lux is None:
+            self.lux = float(lux)
+        else:
+            alpha = -math.expm1(-max(dt, 0.0) / max(0.01, tau))
+            self.lux += alpha * (float(lux) - self.lux)
+        return self.lux
+
+    def advance(self, dt):
+        if self.point is None or self.target is None:
+            return self.point
+        dt = min(max(dt, 0.0), 0.1)
+        if dt <= 0:
+            return self.point
+        omega = 4.744 / self.transition_s
+        decay = math.exp(-omega * dt)
+        point, velocity = [], []
+        for index in (0, 1):
+            error = self.point[index] - self.target[index]
+            c = self.velocity[index] + omega * error
+            value = self.target[index] + (error + c * dt) * decay
+            speed = (self.velocity[index] - omega * c * dt) * decay
+            move = value - self.point[index]
+            limit = self.max_rate * dt
+            if abs(move) > limit:
+                move = math.copysign(limit, move)
+                value = self.point[index] + move
+                speed = move / dt
+            if not math.isfinite(value):
+                value, speed = self.target[index], 0.0
+            point.append(max(WHITE_MIN, min(WHITE_MAX, value)))
+            velocity.append(speed)
+        self.point = tuple(point)
+        self.velocity = tuple(velocity)
+        return self.point
 
 
 # --------------------------------------------------------- версии и обновления
@@ -430,6 +498,7 @@ class Plugin:
     def __init__(self):
         self.settings = dict(DEFAULTS)
         self.task = None
+        self.smooth = _SmoothWhite()
 
     # ------------------------------------------------------------------ настройки
 
@@ -482,6 +551,7 @@ class Plugin:
         number("lux_dark", 15.0, 0.0, 100000.0)
         number("lux_bright", 400.0, 1.0, 100000.0)
         number("max_warm_k", 3900.0, 2000.0, 6500.0)
+        number("smooth_s", 5.0, 0.5, 30.0)
         if self.settings["lux_bright"] <= self.settings["lux_dark"]:
             self.settings["lux_bright"] = self.settings["lux_dark"] + 1.0
         device = self.settings.get("device", "")
@@ -495,13 +565,13 @@ class Plugin:
     async def _loop(self):
         loop = asyncio.get_running_loop()
         global _last_white
-        want = None
         last_read = 0.0
         last_verify = 0.0
         last_logged = None
         prev_enabled = None
         fails = 0
         retry_at = 0.0
+        prev_tick = time.monotonic()
         while True:
             try:
                 if os.getppid() == 1:
@@ -510,33 +580,49 @@ class Plugin:
                     os._exit(0)
                 settings = dict(self.settings)
                 now = time.monotonic()
+                dt = now - prev_tick
+                prev_tick = now
                 enabled = bool(settings.get("enabled", True))
                 if enabled != prev_enabled:
                     prev_enabled = enabled
                     last_read = 0.0
                     last_verify = 0.0
                     last_logged = None
+                    self.smooth.set_target(NEUTRAL if not enabled else self.smooth.target or NEUTRAL)
                 if not enabled:
-                    # Выключено: один раз возвращаем нейтраль и больше экран не трогаем.
-                    if _last_white is not None and _last_white != NEUTRAL and now >= retry_at:
-                        if await loop.run_in_executor(None, _write_white, NEUTRAL):
-                            _last_white = NEUTRAL
-                            _last_state["white"] = NEUTRAL
-                            _last_state["target"] = list(NEUTRAL)
+                    # Выключено: плавно возвращаем нейтраль и больше экран не трогаем.
+                    advanced = self.smooth.advance(dt)
+                    step = None if advanced is None else (round(advanced[0], 4), round(advanced[1], 4))
+                    if step is not None and step != _last_white and now >= retry_at:
+                        if await loop.run_in_executor(None, _write_white, step):
+                            _last_white = step
+                            _last_state["white"] = step
+                            fails = 0
+                            retry_at = 0.0
+                        else:
+                            fails += 1
+                            retry_at = now + FAIL_DELAYS[min(fails - 1, len(FAIL_DELAYS) - 1)]
                     await asyncio.sleep(TICK)
                     continue
                 if now - last_read >= SENSOR_INTERVAL:
+                    read_dt = (now - last_read) if last_read else SENSOR_INTERVAL
                     lux = await loop.run_in_executor(None, _read_als_lux)
-                    _last_state["lux"] = round(lux) if lux is not None else None
-                    want = _target_white(settings, lux)
-                    _last_state["target"] = list(want) if want else None
+                    smooth_lux = self.smooth.smooth_lux(lux, read_dt)
+                    _last_state["lux"] = round(smooth_lux) if smooth_lux is not None else None
+                    want = _target_white(settings, smooth_lux)
+                    if want is not None:
+                        self.smooth.set_target(want, settings.get("smooth_s"))
+                        _last_state["target"] = list(want)
                     last_read = now
-                if want is not None and now - last_verify >= VERIFY_INTERVAL:
+                if now - last_verify >= VERIFY_INTERVAL:
                     last_verify = now
                     actual = await loop.run_in_executor(None, _read_white)
                     if actual is None:
-                        # Свойство пропало (перезапуск gamescope) — применяем заново.
+                        # Свойство пропало (перезапуск gamescope) — начинаем заново.
                         _last_white = None
+                        _last_state["supported"] = None
+                        if self.smooth.target is not None:
+                            self.smooth.prime(self.smooth.target)
                     elif _last_white is not None and (
                             abs(actual[0] - _last_white[0]) > VERIFY_TOLERANCE
                             or abs(actual[1] - _last_white[1]) > VERIFY_TOLERANCE):
@@ -545,30 +631,30 @@ class Plugin:
                             f"({actual[0]:.4f} / {actual[1]:.4f}) — возвращаю свою")
                         _last_white = actual
                         _last_state["white"] = actual
+                        self.smooth.prime(actual)
                         last_logged = None
-                cur = _last_white
-                if want is not None and now >= retry_at:
-                    step = want if cur is None else _approach(cur, want)
-                    if step != cur:
-                        if await loop.run_in_executor(None, _write_white, step):
-                            _last_white = step
-                            _last_state["white"] = step
-                            _last_state["applied"] = True
-                            _last_state["error"] = ""
-                            fails = 0
-                            retry_at = 0.0
-                            if last_logged is None or abs(step[0] - last_logged[0]) >= 0.002:
-                                last_logged = step
-                                decky.logger.info(
-                                    f"autowhite: точка белого {step[0]:.4f} / "
-                                    f"{step[1]:.4f} (люкс {_last_state['lux']})")
-                        else:
-                            # Ошибка записи: не долбим xprop каждые 0.2 с.
-                            fails += 1
-                            delay = FAIL_DELAYS[min(fails - 1, len(FAIL_DELAYS) - 1)]
-                            retry_at = now + delay
-                            decky.logger.warning(
-                                f"autowhite: запись не удалась ({fails}), пауза {delay:.0f} с")
+                advanced = self.smooth.advance(dt)
+                step = None if advanced is None else (round(advanced[0], 4), round(advanced[1], 4))
+                if step is not None and step != _last_white and now >= retry_at:
+                    if await loop.run_in_executor(None, _write_white, step):
+                        _last_white = step
+                        _last_state["white"] = step
+                        _last_state["applied"] = True
+                        _last_state["error"] = ""
+                        fails = 0
+                        retry_at = 0.0
+                        if last_logged is None or abs(step[0] - last_logged[0]) >= 0.002:
+                            last_logged = step
+                            decky.logger.info(
+                                f"autowhite: точка белого {step[0]:.4f} / "
+                                f"{step[1]:.4f} (люкс {_last_state['lux']})")
+                    else:
+                        # Ошибка записи: не долбим xprop каждые 0.2 с.
+                        fails += 1
+                        delay = FAIL_DELAYS[min(fails - 1, len(FAIL_DELAYS) - 1)]
+                        retry_at = now + delay
+                        decky.logger.warning(
+                            f"autowhite: запись не удалась ({fails}), пауза {delay:.0f} с")
                 await asyncio.sleep(TICK)
             except asyncio.CancelledError:
                 raise
@@ -592,16 +678,19 @@ class Plugin:
             _last_state["lux"] = round(lux) if lux is not None else None
             want = _target_white(self.settings, lux)
             _last_state["target"] = list(want) if want else None
-            if want is not None and await loop.run_in_executor(None, _write_white, want):
-                _last_white = want
-                _last_state["white"] = want
-                _last_state["applied"] = True
-                decky.logger.info(
-                    f"autowhite: точка белого {want[0]:.4f} / {want[1]:.4f} "
-                    f"(люкс {_last_state['lux']})")
+            if want is not None:
+                self.smooth.prime(want)
+                if await loop.run_in_executor(None, _write_white, want):
+                    _last_white = want
+                    _last_state["white"] = want
+                    _last_state["applied"] = True
+                    decky.logger.info(
+                        f"autowhite: точка белого {want[0]:.4f} / {want[1]:.4f} "
+                        f"(люкс {_last_state['lux']})")
         else:
             _last_white = NEUTRAL
             _last_state["white"] = NEUTRAL
+            self.smooth.prime(NEUTRAL)
             await loop.run_in_executor(None, _write_white, NEUTRAL)
         self.task = asyncio.create_task(self._loop())
 

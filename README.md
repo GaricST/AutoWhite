@@ -32,9 +32,11 @@ white point atom `GAMESCOPE_DISPLAY_VIRTUAL_WHITE` (CIE 1931 x/y):
 
 - **Sensor-driven** — the ambient light sensor sets the white point automatically; no
   schedule, no manual switching
-- **Warm in the dark, neutral in bright light** — the point glides to the target
-  exponentially (0.2 s tick, sensor polled once a second), so flipping a light switch does
-  not produce a visible jump
+- **Warm in the dark, neutral in bright light** — the point moves with a critically damped
+  second-order filter (the same approach as auto-brightness in LegionToolkit): the transition
+  takes `smooth_s` seconds (5 by default), speed is limited, there is a dead band and an
+  input filter on the sensor, and the step is computed from real time — so flipping a light
+  switch produces a smooth glide, not a jump
 - **Applies immediately at boot** — Decky loads the plugin at startup and the white point
   is set before the panel is ever opened
 - **Enable / disable toggle** — switching the plugin off restores the neutral D65 point

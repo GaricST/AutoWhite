@@ -30,13 +30,7 @@ const S = {
     white: ["Точка белого", "White point"],
     noSensor: ["датчик не найден", "sensor not found"],
     luxUnit: [" лк", " lx"],
-    statusLabel: ["Статус", "Status"],
-    statusActive: ["активно", "active"],
-    statusOff: ["выключено", "disabled"],
-    statusNoSensor: ["датчик не найден — плагин не вмешивается", "no sensor — the plugin stays away"],
-    statusError: ["ошибка записи в gamescope", "gamescope write failed"],
     unknown: ["неизвестно", "unknown"],
-    sensor: ["Датчик", "Sensor"],
     target: ["Цель", "Target"],
     update: ["Обновления", "Updates"],
     updateButton: ["Проверить обновление", "Check for updates"],
@@ -139,10 +133,7 @@ const Content = () => {
         : "—";
     const luxText = (st.lux === null || st.lux === undefined)
         ? t("noSensor") : st.lux + t("luxUnit");
-    const statusText = !settings.enabled
-        ? t("statusOff")
-        : (st.error ? t("statusError") + ": " + String(st.error).slice(0, 60)
-            : (st.lux === null || st.lux === undefined ? t("statusNoSensor") : t("statusActive")));
+
 
     const controls = [
         row(SP_JSX.jsx(DFL.ToggleField, {
@@ -165,14 +156,10 @@ const Content = () => {
         children: [
             section(t("title"), controls, "main"),
             section(t("state"), [
-                row(SP_JSX.jsx(DFL.Field, { label: t("statusLabel"), children: statusText }), "status"),
                 row(SP_JSX.jsx(DFL.Field, { label: t("lux"), children: luxText }), "lux"),
-                st.sensor
-                    ? row(SP_JSX.jsx(DFL.Field, { label: t("sensor"), children: st.sensor }), "sensor")
-                    : null,
                 row(SP_JSX.jsx(DFL.Field, { label: t("white"), children: whiteText }), "wp"),
                 row(SP_JSX.jsx(DFL.Field, { label: t("target"), children: targetText }), "target")
-            ].filter(Boolean), "state"),
+            ], "state"),
             section(t("update"), [
                 row(SP_JSX.jsx(DFL.ButtonItem, {
                     layout: "below",

@@ -73,20 +73,60 @@ check("при 400 лк экран уже почти нейтрален",
 check("логарифмическая шкала: в темноте тёплый край",
       aw._target_white(S, 5)[0] > aw.NEUTRAL[0] + 0.05, True)
 
-print("плавное приближение:")
+print("плавность (фильтр 2-го порядка, как в LegionToolkit):")
 target = aw._xy_for_cct(2700)
-cur = aw.NEUTRAL
+smooth = aw._SmoothWhite(transition_s=2.0, max_rate=0.08, deadband=0.0005)
+smooth.prime(aw.NEUTRAL)
+smooth.set_target(target, 2.0)
+prev = smooth.point
 steps = 0
-while cur != target and steps < 500:
-    nxt = aw._approach(cur, target)
-    if abs(nxt[0] - cur[0]) > 0.06:
-        failures.append("шаг слишком большой: %r -> %r" % (cur, nxt))
-    cur = nxt
+overshoot = 0.0
+while abs(smooth.point[0] - target[0]) > 1e-4 and steps < 2000:
+    nxt = smooth.advance(1.0 / 30.0)
+    if abs(nxt[0] - prev[0]) > 0.08 * (1.0 / 30.0) * 1.05 + 1e-5:
+        failures.append("превышено ограничение скорости: %r -> %r" % (prev, nxt))
+    overshoot = max(overshoot, abs(nxt[0] - target[0]))
+    prev = nxt
     steps += 1
-check("дошли до цели", cur, target)
-check("переход плавный (несколько шагов)", steps > 5, True)
-check("мёртвая зона догоняет сразу",
-      aw._approach((0.3749, 0.3749), (0.3750, 0.3750)), (0.3750, 0.3750))
+check("дошли до цели", abs(smooth.point[0] - target[0]) < 1e-4, True)
+check("переход плавный (десятки шагов)", steps > 20, True)
+check("без перерегулирования", overshoot <= abs(target[0] - aw.NEUTRAL[0]) + 0.002, True)
+
+slow = aw._SmoothWhite(transition_s=5.0)
+slow.prime(aw.NEUTRAL)
+slow.set_target(target, 5.0)
+fast = aw._SmoothWhite(transition_s=1.0)
+fast.prime(aw.NEUTRAL)
+fast.set_target(target, 1.0)
+for _ in range(30):
+    slow.advance(1.0 / 30.0)
+    fast.advance(1.0 / 30.0)
+check("переход 5 с медленнее, чем 1 с", slow.point[0] < fast.point[0], True)
+
+one = aw._SmoothWhite(transition_s=2.0)
+one.prime(aw.NEUTRAL)
+one.set_target(target, 2.0)
+many = aw._SmoothWhite(transition_s=2.0)
+many.prime(aw.NEUTRAL)
+many.set_target(target, 2.0)
+for _ in range(3):
+    one.advance(0.1)
+for _ in range(30):
+    many.advance(0.01)
+check("одинаковый переход при разном dt (в пределах тика)",
+      abs(one.point[0] - many.point[0]) < 0.002, True)
+
+tiny = aw._SmoothWhite(deadband=0.001)
+tiny.prime((0.3128, 0.3292))
+tiny.set_target((0.3130, 0.3294))
+check("мёртвая зона игнорирует мелкую цель", tiny.target, (0.3128, 0.3292))
+
+lux = aw._SmoothWhite()
+first = lux.smooth_lux(0.0, 1.0)
+second = lux.smooth_lux(1000.0, 1.0)
+check("фильтр люксов не прыгает сразу", 0.0 < second < 1000.0, True)
+check("фильтр люксов принимает первый замер", first, 0.0)
+check("фильтр люксов переживает None", lux.smooth_lux(None, 1.0), second)
 
 print("датчики:")
 check("один датчик", aw._combine_lux([10.0]), 10.0)
@@ -143,7 +183,7 @@ p4.settings.update({"enabled": "true"})
 p4._sanitize()
 check('строка "true" -> включено', p4.settings["enabled"], True)
 check("обязательные ключи на месте", sorted(aw.DEFAULTS),
-      sorted(["enabled", "warmth", "lux_dark", "lux_bright", "max_warm_k", "device"]))
+      sorted(["enabled", "warmth", "lux_dark", "lux_bright", "max_warm_k", "smooth_s", "device"]))
 
 print("версии и обновления:")
 check("текущая версия из манифеста", aw._current_version(), "1.0.0")
