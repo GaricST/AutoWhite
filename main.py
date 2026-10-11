@@ -157,32 +157,44 @@ def _log_channels(directory):
 
 
 def _lux_from_device(directory):
-    """(люксы, подпись канала) для одного IIO-устройства или (None, причина)."""
+    """(люксы, подпись канала) для одного IIO-устройства или (None, причина).
+
+    Каналы света у разных драйверов называются по-разному, поэтому собираем все
+    кандидаты и берём первый НЕНУЛЕВОЙ по приоритету: обработанный канал,
+    затем сырой, затем интенсивность. Ноль — тоже валидное показание, поэтому
+    он используется, только если все кандидаты нулевые.
+    """
     _log_channels(directory)
+    name = _read_text(os.path.join(directory, "name")) or ""
+    candidates = []
+
     processed = _read_number(os.path.join(directory, "in_illuminance_input"))
+    if processed is not None:
+        candidates.append((0, max(0.0, processed), "in_illuminance_input"))
+
     raw = _read_number(os.path.join(directory, "in_illuminance_raw"))
-    # Обработанный канал приоритетен, но если он ноль, а сырой живой — берём сырой
-    # (так ведёт себя ltrf216a на Steam Deck: input пустой, raw меняется от света).
-    if processed is not None and not (processed == 0 and raw):
-        return max(0.0, processed), "in_illuminance_input"
     if raw is not None:
         scaled = _scaled_lux(directory, "in_illuminance_raw", raw)
         if scaled is not None:
-            return max(0.0, scaled), "in_illuminance_raw*scale"
-        return max(0.0, raw), "in_illuminance_raw"
-    name = _read_text(os.path.join(directory, "name")) or ""
-    # Каналы интенсивности без канала освещённости — это тоже датчик света
-    # (у части драйверов, в том числе на консолях). Имя драйвера пишем в подпись.
+            candidates.append((1, max(0.0, scaled), "in_illuminance_raw*scale"))
+        else:
+            candidates.append((1, max(0.0, raw), "in_illuminance_raw"))
+
     for channel in INTENSITY_CHANNELS:
         value = _read_number(os.path.join(directory, channel))
         if value is None:
             continue
         scaled = _scaled_lux(directory, channel, value)
         if scaled is not None:
-            return max(0.0, scaled), name + "/" + channel + "*scale"
-        # В 0.2 такой канал работал как есть; оставляем так же, но помечаем шкалу.
-        return max(0.0, value), name + "/" + channel + " (без scale)"
-    return None, None
+            candidates.append((2, max(0.0, scaled), name + "/" + channel + "*scale"))
+        else:
+            candidates.append((2, max(0.0, value), name + "/" + channel + " (без scale)"))
+
+    if not candidates:
+        return None, None
+    alive = [item for item in candidates if item[1] > 0]
+    chosen = (alive or candidates)[0]
+    return chosen[1], chosen[2]
 
 
 def _device_sort_key(path):

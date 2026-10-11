@@ -176,6 +176,9 @@ check("нулевой processed при живом raw -> raw*scale (как на 
 os.remove(os.path.join(devdir, "in_illuminance_input"))
 value, source = aw._lux_from_device(devdir)
 check("без обработанного канала -> raw*scale", round(value, 3), 50.0)
+for entry in os.listdir(devdir):
+    if "intensity" in entry:
+        os.remove(os.path.join(devdir, entry))
 sysfs("in_illuminance_input", "0")
 sysfs("in_illuminance_raw", "0")
 check("полная темнота -> 0 люкс", aw._lux_from_device(devdir),
