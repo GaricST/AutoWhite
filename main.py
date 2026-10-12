@@ -701,6 +701,7 @@ class Plugin:
         prev_tick = time.monotonic()
         started_at = prev_tick
         fast_until = 0.0
+        resume_until = 0.0
         while True:
             try:
                 if os.getppid() == 1:
@@ -720,6 +721,12 @@ class Plugin:
                     last_read = 0.0
                     last_verify = 0.0
                     fast_until = now + VERIFY_FAST_WINDOW
+                    resume_until = now + VERIFY_FAST_WINDOW
+                    # gamescope при пробуждении сам ставит нейтраль, поэтому
+                    # сразу перезаписываем свою точку и не ждём сверки.
+                    if self.smooth.target is not None:
+                        self.smooth.prime(self.smooth.target)
+                    _last_white = None
                 enabled = bool(settings.get("enabled", True))
                 if enabled != prev_enabled:
                     prev_enabled = enabled
@@ -780,7 +787,9 @@ class Plugin:
                         _last_state["white"] = actual
                         # После сна не разгоняемся от нейтрали: ставим свою точку
                         # сразу, иначе экран несколько секунд остаётся холодным.
-                        if resumed and self.smooth.target is not None:
+                        if now < resume_until and self.smooth.target is not None:
+                            # Сразу после сна (или после сброса Steam UI) не
+                            # разгоняемся от нейтрали — возвращаем точку сразу.
                             self.smooth.prime(self.smooth.target)
                         else:
                             self.smooth.prime(actual)
