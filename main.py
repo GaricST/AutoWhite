@@ -39,6 +39,7 @@ TICK = 0.2                      # период плавного шага, с
 SMOOTH = 0.15                   # доля пути до цели за шаг (τ ≈ 1.2 с)
 DEADBAND = 0.0005               # мёртвая зона: мельче — не трогаем экран
 VERIFY_INTERVAL = 5.0           # как часто сверяем фактическую точку с нашей
+RESUME_GAP = 3.0                # пауза в цикле длиннее — значит, был сон
 VERIFY_FAST_INTERVAL = 1.5      # сразу после старта сверяем чаще: gamescope
 VERIFY_FAST_WINDOW = 30.0       # создаёт атом позже плагина и сбрасывает его
 VERIFY_TOLERANCE = 0.001        # расхождение, которое считаем чужой правкой
@@ -699,6 +700,7 @@ class Plugin:
         retry_at = 0.0
         prev_tick = time.monotonic()
         started_at = prev_tick
+        fast_until = 0.0
         while True:
             try:
                 if os.getppid() == 1:
@@ -709,6 +711,15 @@ class Plugin:
                 now = time.monotonic()
                 dt = now - prev_tick
                 prev_tick = now
+                resumed = dt > RESUME_GAP
+                if resumed:
+                    # Система вернулась из сна: gamescope мог пересоздать атом
+                    # и сбросить его в нейтраль — проверяем и правим сразу.
+                    decky.logger.info(
+                        f"autowhite: выход из сна (пауза {dt:.0f} с) — возвращаю точку")
+                    last_read = 0.0
+                    last_verify = 0.0
+                    fast_until = now + VERIFY_FAST_WINDOW
                 enabled = bool(settings.get("enabled", True))
                 if enabled != prev_enabled:
                     prev_enabled = enabled
@@ -747,7 +758,8 @@ class Plugin:
                         _last_state["target"] = list(want)
                     last_read = now
                 verify_interval = (VERIFY_FAST_INTERVAL
-                                   if now - started_at < VERIFY_FAST_WINDOW
+                                   if (now - started_at < VERIFY_FAST_WINDOW
+                                       or now < fast_until)
                                    else VERIFY_INTERVAL)
                 if now - last_verify >= verify_interval:
                     last_verify = now
@@ -766,7 +778,12 @@ class Plugin:
                             f"({actual[0]:.4f} / {actual[1]:.4f}) — возвращаю свою")
                         _last_white = actual
                         _last_state["white"] = actual
-                        self.smooth.prime(actual)
+                        # После сна не разгоняемся от нейтрали: ставим свою точку
+                        # сразу, иначе экран несколько секунд остаётся холодным.
+                        if resumed and self.smooth.target is not None:
+                            self.smooth.prime(self.smooth.target)
+                        else:
+                            self.smooth.prime(actual)
                         last_logged = None
                 # Первое появление цели (например, датчик стал доступен после
                 # перезагрузки) — применяем сразу, без разгона от нейтрали.
