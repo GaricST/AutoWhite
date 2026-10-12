@@ -179,7 +179,7 @@ const Content = () => {
         }), "warm"),
         row(SP_JSX.jsx(DFL.SliderField, {
             label: t("tint"), value: Math.round((settings.tint || 0) * 100),
-            min: -100, max: 100, step: 10, showValue: true,
+            min: -100, max: 100, step: 5, showValue: true,
             onChange: (v) => {
                 if (Math.round((settings.tint || 0) * 100) !== v) patch({ tint: v / 100 });
             }
