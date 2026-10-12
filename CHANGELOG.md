@@ -6,6 +6,11 @@
 
 **Возможности / Features**
 
+- Старт и выход из сна: точка белого применяется сразу, без промежуточной нейтрали;
+  после пробуждения перезаписывается за ~0.2 с, а сверка первые 30 с идёт раз в 1.5 с
+  (gamescope при пробуждении сбрасывает атом в нейтраль — плагин возвращает свою точку).
+  / On start and resume the point is applied at once, with no neutral flash; after wake it
+  is rewritten within ~0.2 s and verification runs every 1.5 s for the first 30 s.
 - Автоматическая подстройка точки белого по датчику освещённости (ALS) через виртуальную
   точку белого gamescope — `GAMESCOPE_DISPLAY_VIRTUAL_WHITE` (CIE 1931 x/y).
   / Ambient-light adaptive white point driven through gamescope's virtual white point.

@@ -40,6 +40,9 @@ white point atom `GAMESCOPE_DISPLAY_VIRTUAL_WHITE` (CIE 1931 x/y):
   switch produces a smooth glide, not a jump
 - **Applies immediately at boot** — Decky loads the plugin at startup and the white point
   is set before the panel is ever opened
+- **Survives sleep and wake** — gamescope resets the atom to neutral on resume; the plugin
+  notices the gap, sets its own point at once (`~0.2 s`) and keeps checking every 1.5 s for
+  the next 30 s, so the screen never stays cold
 - **Enable / disable toggle** — switching the plugin off restores the neutral D65 point
 - **Cooler — Warmer slider** — how warm the dark end becomes (0…100 %)
 - **Greener — Redder slider** — shifts the point off the black-body locus (Duv), so you can
