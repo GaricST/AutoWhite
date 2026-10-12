@@ -216,6 +216,18 @@ Checked on 2026-10-10 — no direct equivalent was found. The closest projects:
 AutoWhite is the only one that closes the loop: **ALS → white point, continuously and
 automatically**, without a schedule and without user input.
 
+## Roadmap
+
+Ideas that are written down but deliberately not in the released build yet:
+
+- **Automatic thresholds** — let the plugin learn the dark/bright levels from what the sensor
+  actually sees. A prototype exists, but it is held back: on a low-range sensor (Steam Deck
+  reports 0.15–0.45 lx) it would amplify noise instead of helping.
+- **"Calibrate now" button** — measure the room and the bright end on demand, then store the
+  result as thresholds for the current device.
+- **Explicit policy for Steam's night mode** — pause AutoWhite or warn about the double effect.
+- **Installing from a release tag** with staging and rollback, instead of the `main` branch.
+
 ## Notes and limitations
 
 - If Steam's own night mode is enabled, both effects add up — AutoWhite does not read
