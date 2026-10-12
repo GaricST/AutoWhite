@@ -258,7 +258,18 @@ p4._sanitize()
 check('строка "true" -> включено', p4.settings["enabled"], True)
 check("обязательные ключи на месте", sorted(aw.DEFAULTS),
       sorted(["enabled", "warmth", "tint", "lux_dark", "lux_bright", "max_warm_k", "smooth_s",
-              "device", "profile_version"]))
+              "device", "profile_version", "settings_version"]))
+
+print("миграция настроек:")
+pm = aw.Plugin()
+pm.settings.update({"smooth_s": 5.0, "settings_version": 0})
+pm._migrate()
+check("миграция ускоряет плавность", pm.settings["smooth_s"], aw.DEFAULTS["smooth_s"])
+check("версия настроек записана", pm.settings["settings_version"], aw.SETTINGS_VERSION)
+pm2 = aw.Plugin()
+pm2.settings.update({"smooth_s": 3.0, "settings_version": aw.SETTINGS_VERSION})
+pm2._migrate()
+check("актуальная версия настроек не трогает плавность", pm2.settings["smooth_s"], 3.0)
 
 print("версии и обновления:")
 check("текущая версия из манифеста", aw._current_version(), "1.0.0")

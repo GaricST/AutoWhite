@@ -39,6 +39,8 @@ TICK = 0.2                      # период плавного шага, с
 SMOOTH = 0.15                   # доля пути до цели за шаг (τ ≈ 1.2 с)
 DEADBAND = 0.0005               # мёртвая зона: мельче — не трогаем экран
 VERIFY_INTERVAL = 5.0           # как часто сверяем фактическую точку с нашей
+VERIFY_FAST_INTERVAL = 1.5      # сразу после старта сверяем чаще: gamescope
+VERIFY_FAST_WINDOW = 30.0       # создаёт атом позже плагина и сбрасывает его
 VERIFY_TOLERANCE = 0.001        # расхождение, которое считаем чужой правкой
 FAIL_DELAYS = (5.0, 15.0, 60.0) # пауза после подряд идущих ошибок записи, с
 
@@ -93,9 +95,11 @@ DEFAULTS = {
     "smooth_s": 1.2,        # время перехода точки белого, с (быстрее — меньше)
     "device": "",           # модель, под которую подставлен профиль
     "profile_version": 0,   # версия профиля: при обновлении применяем заново
+    "settings_version": 0,  # версия самих настроек: для одноразовых миграций
 }
 
 PROFILE_VERSION = 5          # поднять, если меняются значения профилей
+SETTINGS_VERSION = 1         # поднять, если новые значения по умолчанию должны примениться
 
 _last_state = {"lux": None, "white": None, "applied": False, "error": "",
                "sensor": None, "target": None, "supported": None}
@@ -612,7 +616,28 @@ class Plugin:
         except (OSError, ValueError) as exc:
             decky.logger.warning(f"autowhite: настройки не прочитаны ({exc})")
         self._sanitize()
+        self._migrate()
         self._apply_device_profile()
+
+    def _migrate(self):
+        """Одноразовые правки настроек при обновлении плагина."""
+        version = int(self.settings.get("settings_version", 0) or 0)
+        if version >= SETTINGS_VERSION:
+            return
+        # Плавность раньше была 5 с и не имела интерфейса — обновляем всем,
+        # кто ещё сидит на старом значении (иначе переход остаётся медленным).
+        try:
+            old_default = float(self.settings.get("smooth_s", 5.0))
+        except (TypeError, ValueError):
+            old_default = 5.0
+        if old_default >= 5.0:
+            self.settings["smooth_s"] = DEFAULTS["smooth_s"]
+        self.settings["settings_version"] = SETTINGS_VERSION
+        self._sanitize()
+        _save_settings(self.settings)
+        decky.logger.info(
+            f"autowhite: настройки обновлены до версии {SETTINGS_VERSION} "
+            f"(плавность {self.settings['smooth_s']} с)")
 
     def _apply_device_profile(self):
         """На новой консоли подставляет её профиль (тёплый конец и пороги)."""
@@ -673,6 +698,7 @@ class Plugin:
         fails = 0
         retry_at = 0.0
         prev_tick = time.monotonic()
+        started_at = prev_tick
         while True:
             try:
                 if os.getppid() == 1:
@@ -689,7 +715,10 @@ class Plugin:
                     last_read = 0.0
                     last_verify = 0.0
                     last_logged = None
-                    self.smooth.set_target(NEUTRAL if not enabled else self.smooth.target or NEUTRAL)
+                    if not enabled:
+                        self.smooth.set_target(NEUTRAL)
+                    # При включении цель появится из показаний датчика — нейтраль
+                    # на экран не выводим, чтобы не было «мигания» после ребута.
                 if not enabled:
                     # Выключено: плавно возвращаем нейтраль и больше экран не трогаем.
                     advanced = self.smooth.advance(dt)
@@ -717,7 +746,10 @@ class Plugin:
                         self.smooth.set_target(want, settings.get("smooth_s"))
                         _last_state["target"] = list(want)
                     last_read = now
-                if now - last_verify >= VERIFY_INTERVAL:
+                verify_interval = (VERIFY_FAST_INTERVAL
+                                   if now - started_at < VERIFY_FAST_WINDOW
+                                   else VERIFY_INTERVAL)
+                if now - last_verify >= verify_interval:
                     last_verify = now
                     actual = await loop.run_in_executor(None, _read_white)
                     if actual is None:
@@ -736,6 +768,10 @@ class Plugin:
                         _last_state["white"] = actual
                         self.smooth.prime(actual)
                         last_logged = None
+                # Первое появление цели (например, датчик стал доступен после
+                # перезагрузки) — применяем сразу, без разгона от нейтрали.
+                if self.smooth.point is None and self.smooth.target is not None:
+                    self.smooth.prime(self.smooth.target)
                 advanced = self.smooth.advance(dt)
                 step = None if advanced is None else (round(advanced[0], 4), round(advanced[1], 4))
                 if step is not None and step != _last_white and now >= retry_at:
